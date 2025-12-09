@@ -72,6 +72,14 @@ const electronAPI = {
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('tags:delete', id),
   },
 
+  // Settings
+  settings: {
+    get: (): Promise<{ theme: 'dark' | 'light' | 'system' }> => ipcRenderer.invoke('settings:get'),
+    set: (settings: { theme?: 'dark' | 'light' | 'system' }): Promise<{ theme: 'dark' | 'light' | 'system' }> =>
+      ipcRenderer.invoke('settings:set', settings),
+    getEffectiveTheme: (): Promise<'dark' | 'light'> => ipcRenderer.invoke('settings:getEffectiveTheme'),
+  },
+
   // Logging API for renderer
   log: {
     debug: (message: string, data?: Record<string, unknown>) =>

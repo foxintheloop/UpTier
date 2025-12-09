@@ -85,7 +85,10 @@
       "Bash(unset:*)",
       "Bash(pnpm build:shared:*)",
       "Bash(pnpm build:mcp:*)",
-      "Bash(pnpm --filter @uptier/electron build:*)"
+      "Bash(pnpm --filter @uptier/electron build:*)",
+      "Bash(npm run package:*)",
+      "Bash(set:*)",
+      "Bash(npx electron-builder --win --config.win.signAndEditExecutable=false)"
     ],
     "deny": [],
     "ask": []

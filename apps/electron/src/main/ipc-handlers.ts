@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron';
 import { getDb, generateId, nowISO } from './database';
 import { createScopedLogger, createIpcTimer } from './logger';
+import { getSettings, setSettings, getEffectiveTheme } from './settings';
+import type { AppSettings, ThemeMode } from './settings';
 import type {
   List,
   ListWithCount,
@@ -658,5 +660,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:removeTag', withLogging('tasks:removeTag', (_, taskId: string, tagId: string) => removeTagFromTask(taskId, tagId)));
   ipcMain.handle('tasks:getTags', withLogging('tasks:getTags', (_, taskId: string) => getTaskTags(taskId)));
 
-  ipcLog.info('IPC handlers registered', { count: 28 });
+  // Settings
+  ipcMain.handle('settings:get', withLogging('settings:get', () => getSettings()));
+  ipcMain.handle('settings:set', withLogging('settings:set', (_, settings: Partial<AppSettings>) => setSettings(settings)));
+  ipcMain.handle('settings:getEffectiveTheme', withLogging('settings:getEffectiveTheme', () => getEffectiveTheme()));
+
+  ipcLog.info('IPC handlers registered', { count: 31 });
 }

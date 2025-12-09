@@ -21,6 +21,7 @@ import type { ListWithCount } from '@uptier/shared';
 interface SidebarProps {
   selectedListId: string | null;
   onSelectList: (id: string) => void;
+  onSettingsClick: () => void;
 }
 
 const SMART_LISTS = [
@@ -30,7 +31,7 @@ const SMART_LISTS = [
   { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 
-export function Sidebar({ selectedListId, onSelectList }: SidebarProps) {
+export function Sidebar({ selectedListId, onSelectList, onSettingsClick }: SidebarProps) {
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listsExpanded, setListsExpanded] = useState(true);
@@ -198,7 +199,12 @@ export function Sidebar({ selectedListId, onSelectList }: SidebarProps) {
 
       {/* Footer */}
       <div className="p-2 border-t border-border">
-        <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start gap-2"
+          onClick={onSettingsClick}
+        >
           <Settings className="h-4 w-4" />
           Settings
         </Button>

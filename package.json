@@ -31,6 +31,8 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "electron-vite": "^5.0.0"
+    "canvas": "^3.2.0",
+    "electron-vite": "^5.0.0",
+    "png-to-ico": "^3.0.1"
   }
 }

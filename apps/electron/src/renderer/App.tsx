@@ -4,14 +4,53 @@ import { Sidebar } from './components/Sidebar';
 import { TaskList } from './components/TaskList';
 import type { TaskListHandle } from './components/TaskList';
 import { TaskDetail } from './components/TaskDetail';
+import { Settings } from './components/Settings';
 import { Toaster } from './components/ui/toaster';
 import type { TaskWithGoals } from '@uptier/shared';
+
+type ThemeMode = 'dark' | 'light' | 'system';
+
+// Apply theme to document
+function applyTheme(theme: ThemeMode) {
+  const effectiveTheme = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
+
+  document.documentElement.classList.remove('light', 'dark');
+  if (effectiveTheme === 'light') {
+    document.documentElement.classList.add('light');
+  }
+}
 
 export default function App() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskWithGoals | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
+
+  // Load and apply theme on mount
+  useEffect(() => {
+    window.electronAPI.settings.get().then((settings) => {
+      applyTheme(settings.theme);
+    });
+
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+      window.electronAPI.settings.get().then((settings) => {
+        if (settings.theme === 'system') {
+          applyTheme('system');
+        }
+      });
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const handleThemeChange = (theme: ThemeMode) => {
+    applyTheme(theme);
+  };
 
   // Listen for database changes from MCP server
   useEffect(() => {
@@ -146,6 +185,7 @@ export default function App() {
           setSelectedListId(id);
           setSelectedTask(null);
         }}
+        onSettingsClick={() => setSettingsOpen(true)}
       />
 
       {/* Main Content */}
@@ -180,6 +220,13 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Settings Modal */}
+      <Settings
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        onThemeChange={handleThemeChange}
+      />
 
       {/* Toast notifications */}
       <Toaster />
