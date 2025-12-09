@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare } from 'lucide-react';
+import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
+import { TagPicker } from './TagPicker';
+import { TagBadge } from './TagBadge';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
 import { PRIORITY_SCALES, PRIORITY_TIERS } from '@uptier/shared';
@@ -46,6 +48,11 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
     if (notes !== (task.notes || '')) {
       updateMutation.mutate({ notes: notes || null });
     }
+  };
+
+  const handleTagsChange = () => {
+    // Invalidate tasks query to refresh task data with updated tags
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
   };
 
   const tierInfo = task.priority_tier ? PRIORITY_TIERS[task.priority_tier] : null;
@@ -193,6 +200,28 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
               </div>
             </div>
           )}
+
+          {/* Tags */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Hash className="h-4 w-4" />
+              Tags
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {task.tags && task.tags.length > 0 && (
+                <>
+                  {task.tags.map((tag) => (
+                    <TagBadge key={tag.id} tag={tag} />
+                  ))}
+                </>
+              )}
+              <TagPicker
+                taskId={task.id}
+                selectedTags={task.tags || []}
+                onTagsChange={handleTagsChange}
+              />
+            </div>
+          </div>
 
           {/* Notes */}
           <div className="space-y-2">

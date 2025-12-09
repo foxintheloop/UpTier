@@ -7,11 +7,14 @@ import type {
   Goal,
   GoalWithProgress,
   Subtask,
+  Tag,
   CreateListInput,
   UpdateListInput,
   CreateTaskInput,
   UpdateTaskInput,
   CreateGoalInput,
+  CreateTagInput,
+  UpdateTagInput,
   GetTasksOptions,
 } from '@uptier/shared';
 
@@ -38,6 +41,9 @@ const electronAPI = {
     complete: (id: string): Promise<Task | null> => ipcRenderer.invoke('tasks:complete', id),
     uncomplete: (id: string): Promise<Task | null> => ipcRenderer.invoke('tasks:uncomplete', id),
     reorder: (listId: string, taskIds: string[]): Promise<void> => ipcRenderer.invoke('tasks:reorder', listId, taskIds),
+    addTag: (taskId: string, tagId: string): Promise<boolean> => ipcRenderer.invoke('tasks:addTag', taskId, tagId),
+    removeTag: (taskId: string, tagId: string): Promise<boolean> => ipcRenderer.invoke('tasks:removeTag', taskId, tagId),
+    getTags: (taskId: string): Promise<Tag[]> => ipcRenderer.invoke('tasks:getTags', taskId),
   },
 
   // Goals
@@ -56,6 +62,14 @@ const electronAPI = {
     complete: (id: string): Promise<Subtask | null> => ipcRenderer.invoke('subtasks:complete', id),
     uncomplete: (id: string): Promise<Subtask | null> => ipcRenderer.invoke('subtasks:uncomplete', id),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('subtasks:delete', id),
+  },
+
+  // Tags
+  tags: {
+    getAll: (): Promise<Tag[]> => ipcRenderer.invoke('tags:getAll'),
+    create: (input: CreateTagInput): Promise<Tag> => ipcRenderer.invoke('tags:create', input),
+    update: (id: string, input: UpdateTagInput): Promise<Tag | null> => ipcRenderer.invoke('tags:update', id, input),
+    delete: (id: string): Promise<boolean> => ipcRenderer.invoke('tags:delete', id),
   },
 
   // Logging API for renderer

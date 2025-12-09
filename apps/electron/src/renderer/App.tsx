@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from './components/Sidebar';
 import { TaskList } from './components/TaskList';
+import type { TaskListHandle } from './components/TaskList';
 import { TaskDetail } from './components/TaskDetail';
 import { Toaster } from './components/ui/toaster';
 import type { TaskWithGoals } from '@uptier/shared';
@@ -10,6 +11,7 @@ export default function App() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskWithGoals | null>(null);
   const queryClient = useQueryClient();
+  const taskListRef = useRef<TaskListHandle>(null);
 
   // Listen for database changes from MCP server
   useEffect(() => {
@@ -22,6 +24,118 @@ export default function App() {
 
     return unsubscribe;
   }, [queryClient]);
+
+  // Get current task index for navigation
+  const getCurrentTaskIndex = useCallback(() => {
+    if (!selectedTask || !taskListRef.current) return -1;
+    const tasks = taskListRef.current.getAllTasks();
+    return tasks.findIndex((t) => t.id === selectedTask.id);
+  }, [selectedTask]);
+
+  // Handle task completion toggle
+  const handleToggleComplete = useCallback(async () => {
+    if (!selectedTask) return;
+    if (selectedTask.completed) {
+      await window.electronAPI.tasks.uncomplete(selectedTask.id);
+    } else {
+      await window.electronAPI.tasks.complete(selectedTask.id);
+    }
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['lists'] });
+  }, [selectedTask, queryClient]);
+
+  // Handle task deletion
+  const handleDeleteTask = useCallback(async () => {
+    if (!selectedTask) return;
+    const confirmed = window.confirm(`Delete "${selectedTask.title}"?`);
+    if (confirmed) {
+      await window.electronAPI.tasks.delete(selectedTask.id);
+      setSelectedTask(null);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    }
+  }, [selectedTask, queryClient]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input
+      const target = e.target as HTMLElement;
+      const isInputActive = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      // Ctrl/Cmd + N: Focus quick add
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        taskListRef.current?.focusQuickAdd();
+        return;
+      }
+
+      // Ctrl/Cmd + F: Focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        taskListRef.current?.focusSearch();
+        return;
+      }
+
+      // Escape: Close task detail / clear selection
+      if (e.key === 'Escape' && !isInputActive) {
+        if (selectedTask) {
+          setSelectedTask(null);
+        }
+        return;
+      }
+
+      // Skip navigation shortcuts when typing
+      if (isInputActive) return;
+
+      // Arrow up: Select previous task
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const currentIndex = getCurrentTaskIndex();
+        if (currentIndex > 0) {
+          taskListRef.current?.selectTaskByIndex(currentIndex - 1);
+        } else if (currentIndex === -1) {
+          // No task selected, select last task
+          const tasks = taskListRef.current?.getAllTasks() || [];
+          if (tasks.length > 0) {
+            taskListRef.current?.selectTaskByIndex(tasks.length - 1);
+          }
+        }
+        return;
+      }
+
+      // Arrow down: Select next task
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const currentIndex = getCurrentTaskIndex();
+        const tasks = taskListRef.current?.getAllTasks() || [];
+        if (currentIndex < tasks.length - 1) {
+          taskListRef.current?.selectTaskByIndex(currentIndex + 1);
+        } else if (currentIndex === -1 && tasks.length > 0) {
+          // No task selected, select first task
+          taskListRef.current?.selectTaskByIndex(0);
+        }
+        return;
+      }
+
+      // Space: Toggle completion
+      if (e.key === ' ' && selectedTask) {
+        e.preventDefault();
+        handleToggleComplete();
+        return;
+      }
+
+      // Delete: Delete task
+      if (e.key === 'Delete' && selectedTask) {
+        e.preventDefault();
+        handleDeleteTask();
+        return;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedTask, getCurrentTaskIndex, handleToggleComplete, handleDeleteTask]);
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -40,6 +154,7 @@ export default function App() {
         <div className={`flex-1 overflow-hidden ${selectedTask ? 'border-r border-border' : ''}`}>
           {selectedListId ? (
             <TaskList
+              ref={taskListRef}
               listId={selectedListId}
               selectedTaskId={selectedTask?.id}
               onSelectTask={setSelectedTask}

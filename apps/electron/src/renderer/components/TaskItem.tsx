@@ -1,7 +1,10 @@
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Checkbox } from './ui/checkbox';
 import { PriorityBadge } from './PriorityBadge';
+import { TagBadge } from './TagBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Clock, Target, Zap, Gem } from 'lucide-react';
+import { Clock, Target, Zap, Gem, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals } from '@uptier/shared';
 import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
@@ -11,9 +14,23 @@ interface TaskItemProps {
   isSelected: boolean;
   onSelect: () => void;
   onComplete: (completed: boolean) => void;
+  isDraggable?: boolean;
 }
 
-export function TaskItem({ task, isSelected, onSelect, onComplete }: TaskItemProps) {
+export function TaskItem({ task, isSelected, onSelect, onComplete, isDraggable = true }: TaskItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id, disabled: !isDraggable });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
   const formatDueDate = (dateStr: string) => {
     const date = parseISO(dateStr);
     if (isToday(date)) return 'Today';
@@ -26,13 +43,28 @@ export function TaskItem({ task, isSelected, onSelect, onComplete }: TaskItemPro
   return (
     <TooltipProvider>
       <div
+        ref={setNodeRef}
+        style={style}
         className={cn(
-          'task-item group flex items-start gap-3 px-3 py-2 rounded-md cursor-pointer',
+          'task-item group flex items-start gap-2 px-3 py-2 rounded-md cursor-pointer',
           isSelected && 'bg-accent',
-          task.completed && 'opacity-60'
+          task.completed && 'opacity-60',
+          isDragging && 'opacity-50 bg-accent shadow-lg'
         )}
         onClick={onSelect}
+        {...attributes}
       >
+        {/* Drag Handle */}
+        {isDraggable && (
+          <div
+            {...listeners}
+            className="mt-1 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+        )}
+
         {/* Checkbox */}
         <Checkbox
           checked={task.completed}
@@ -124,6 +156,20 @@ export function TaskItem({ task, isSelected, onSelect, onComplete }: TaskItemPro
                 )}
               >
                 {formatDueDate(task.due_date)}
+              </div>
+            )}
+
+            {/* Tags */}
+            {task.tags && task.tags.length > 0 && (
+              <div className="flex items-center gap-1">
+                {task.tags.slice(0, 2).map((tag) => (
+                  <TagBadge key={tag.id} tag={tag} />
+                ))}
+                {task.tags.length > 2 && (
+                  <span className="text-xs text-muted-foreground">
+                    +{task.tags.length - 2}
+                  </span>
+                )}
               </div>
             )}
           </div>

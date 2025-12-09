@@ -4,6 +4,7 @@ import {
   Sun,
   Star,
   Calendar,
+  CheckCircle2,
   List,
   Plus,
   Target,
@@ -23,9 +24,10 @@ interface SidebarProps {
 }
 
 const SMART_LISTS = [
-  { id: 'my-day', name: 'My Day', icon: Sun, color: '#f59e0b' },
-  { id: 'important', name: 'Important', icon: Star, color: '#ef4444' },
-  { id: 'planned', name: 'Planned', icon: Calendar, color: '#3b82f6' },
+  { id: 'smart:my_day', name: 'My Day', icon: Sun, color: '#f59e0b' },
+  { id: 'smart:important', name: 'Important', icon: Star, color: '#ef4444' },
+  { id: 'smart:planned', name: 'Planned', icon: Calendar, color: '#3b82f6' },
+  { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 
 export function Sidebar({ selectedListId, onSelectList }: SidebarProps) {

@@ -82,7 +82,10 @@
       "Bash(\"C:/Users/Hello/Documents/UpTier/node_modules/.pnpm/electron@31.7.7/node_modules/electron/dist/electron.exe\" \"C:/Users/Hello/Documents/UpTier/apps/electron/test-binding.js\")",
       "Bash(\"C:/Users/Hello/Documents/UpTier/node_modules/.pnpm/electron@31.7.7/node_modules/electron/dist/electron.exe\" \"C:/Users/Hello/Documents/UpTier/apps/electron\")",
       "Bash(\"C:/Users/Hello/Documents/UpTier/node_modules/.pnpm/electron@31.7.7/node_modules/electron/dist/electron.exe\" \"C:/Users/Hello/Documents/UpTier/apps/electron/test-app\")",
-      "Bash(unset:*)"
+      "Bash(unset:*)",
+      "Bash(pnpm build:shared:*)",
+      "Bash(pnpm build:mcp:*)",
+      "Bash(pnpm --filter @uptier/electron build:*)"
     ],
     "deny": [],
     "ask": []

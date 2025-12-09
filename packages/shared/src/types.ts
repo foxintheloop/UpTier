@@ -202,6 +202,16 @@ export interface CreateSubtaskInput {
   title: string;
 }
 
+export interface CreateTagInput {
+  name: string;
+  color?: string;
+}
+
+export interface UpdateTagInput {
+  name?: string;
+  color?: string;
+}
+
 // ============================================================================
 // Query Types
 // ============================================================================
@@ -236,6 +246,7 @@ export interface TaskWithGoals extends Task {
     goal_name: string;
     alignment_strength: number;
   }>;
+  tags: Tag[];
 }
 
 export interface TaskWithSubtasks extends Task {

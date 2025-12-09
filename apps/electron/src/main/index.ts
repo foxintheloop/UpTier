@@ -111,8 +111,6 @@ function createWindow(): void {
     mainWindow.loadURL(devUrl).catch((err) => {
       appLog.error('Failed to load dev URL', err, { url: devUrl });
     });
-    mainWindow.webContents.openDevTools();
-    appLog.debug('DevTools opened');
   } else {
     const prodPath = path.join(__dirname, '../renderer/index.html');
     appLog.info('Loading production file', { path: prodPath });

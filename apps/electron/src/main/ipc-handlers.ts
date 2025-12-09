@@ -9,11 +9,14 @@ import type {
   Goal,
   GoalWithProgress,
   Subtask,
+  Tag,
   CreateListInput,
   UpdateListInput,
   CreateTaskInput,
   UpdateTaskInput,
   CreateGoalInput,
+  CreateTagInput,
+  UpdateTagInput,
   GetTasksOptions,
 } from '@uptier/shared';
 import { DEFAULT_LIST_ICON, DEFAULT_LIST_COLOR } from '@uptier/shared';
@@ -136,8 +139,86 @@ function deleteList(id: string): boolean {
 // Tasks
 // ============================================================================
 
+// Smart list ID prefixes
+const SMART_LIST_IDS = ['smart:my_day', 'smart:important', 'smart:planned', 'smart:completed'];
+
+function isSmartListId(id: string | undefined): boolean {
+  return id !== undefined && id.startsWith('smart:');
+}
+
+function getSmartListTasks(smartListId: string): TaskWithGoals[] {
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+  let sql = '';
+  const params: unknown[] = [];
+
+  switch (smartListId) {
+    case 'smart:my_day':
+      // Tasks due today
+      sql = `SELECT t.* FROM tasks t WHERE t.due_date = ? AND t.completed = 0 ORDER BY t.priority_tier ASC NULLS LAST, t.position ASC`;
+      params.push(today);
+      break;
+    case 'smart:important':
+      // Tier 1 priority tasks
+      sql = `SELECT t.* FROM tasks t WHERE t.priority_tier = 1 AND t.completed = 0 ORDER BY t.position ASC`;
+      break;
+    case 'smart:planned':
+      // Tasks with due dates
+      sql = `SELECT t.* FROM tasks t WHERE t.due_date IS NOT NULL AND t.completed = 0 ORDER BY t.due_date ASC, t.priority_tier ASC NULLS LAST`;
+      break;
+    case 'smart:completed':
+      // Completed tasks (recent first)
+      sql = `SELECT t.* FROM tasks t WHERE t.completed = 1 ORDER BY t.completed_at DESC LIMIT 100`;
+      break;
+    default:
+      return [];
+  }
+
+  const tasks = db.prepare(sql).all(...params) as Task[];
+
+  const goalQuery = db.prepare(`
+    SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
+    FROM task_goals tg
+    JOIN goals g ON g.id = tg.goal_id
+    WHERE tg.task_id = ?
+  `);
+
+  const tagQuery = db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM tags t
+    JOIN task_tags tt ON tt.tag_id = t.id
+    WHERE tt.task_id = ?
+  `);
+
+  return tasks.map((task) => {
+    const goals = goalQuery.all(task.id) as Array<{
+      goal_id: string;
+      goal_name: string;
+      alignment_strength: number;
+    }>;
+    const tags = tagQuery.all(task.id) as Tag[];
+
+    return {
+      ...task,
+      completed: Boolean(task.completed),
+      goals: goals.map((g) => ({
+        goal_id: g.goal_id,
+        goal_name: g.goal_name,
+        alignment_strength: g.alignment_strength,
+      })),
+      tags,
+    };
+  });
+}
+
 function getTasks(options: GetTasksOptions = {}): TaskWithGoals[] {
   const db = getDb();
+
+  // Handle smart list IDs
+  if (isSmartListId(options.list_id)) {
+    return getSmartListTasks(options.list_id!);
+  }
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -163,12 +244,20 @@ function getTasks(options: GetTasksOptions = {}): TaskWithGoals[] {
     WHERE tg.task_id = ?
   `);
 
+  const tagQuery = db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM tags t
+    JOIN task_tags tt ON tt.tag_id = t.id
+    WHERE tt.task_id = ?
+  `);
+
   return tasks.map((task) => {
     const goals = goalQuery.all(task.id) as Array<{
       goal_id: string;
       goal_name: string;
       alignment_strength: number;
     }>;
+    const tags = tagQuery.all(task.id) as Tag[];
 
     return {
       ...task,
@@ -178,6 +267,7 @@ function getTasks(options: GetTasksOptions = {}): TaskWithGoals[] {
         goal_name: g.goal_name,
         alignment_strength: g.alignment_strength,
       })),
+      tags,
     };
   });
 }
@@ -427,6 +517,104 @@ function deleteSubtask(id: string): boolean {
 }
 
 // ============================================================================
+// Tags
+// ============================================================================
+
+function getTags(): Tag[] {
+  const db = getDb();
+  return db.prepare('SELECT * FROM tags ORDER BY name').all() as Tag[];
+}
+
+function createTag(input: CreateTagInput): Tag {
+  const db = getDb();
+  const id = generateId();
+
+  ipcLog.debug('Creating tag', { name: input.name });
+
+  db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(
+    id,
+    input.name,
+    input.color ?? '#6b7280'
+  );
+
+  ipcLog.info('Tag created', { id, name: input.name });
+  return db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as Tag;
+}
+
+function updateTag(id: string, input: UpdateTagInput): Tag | null {
+  const db = getDb();
+  const updates: string[] = [];
+  const values: unknown[] = [];
+
+  if (input.name !== undefined) { updates.push('name = ?'); values.push(input.name); }
+  if (input.color !== undefined) { updates.push('color = ?'); values.push(input.color); }
+
+  if (updates.length === 0) return db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as Tag;
+
+  ipcLog.debug('Updating tag', { id, fields: updates.length });
+
+  values.push(id);
+  db.prepare(`UPDATE tags SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+  ipcLog.info('Tag updated', { id });
+  return db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as Tag;
+}
+
+function deleteTag(id: string): boolean {
+  const db = getDb();
+  ipcLog.debug('Deleting tag', { id });
+
+  const success = db.prepare('DELETE FROM tags WHERE id = ?').run(id).changes > 0;
+
+  if (success) {
+    ipcLog.info('Tag deleted', { id });
+  } else {
+    ipcLog.warn('Tag not deleted (not found)', { id });
+  }
+
+  return success;
+}
+
+function addTagToTask(taskId: string, tagId: string): boolean {
+  const db = getDb();
+  ipcLog.debug('Adding tag to task', { taskId, tagId });
+
+  try {
+    db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)').run(taskId, tagId);
+    ipcLog.info('Tag added to task', { taskId, tagId });
+    return true;
+  } catch (error) {
+    ipcLog.error('Failed to add tag to task', error as Error, { taskId, tagId });
+    return false;
+  }
+}
+
+function removeTagFromTask(taskId: string, tagId: string): boolean {
+  const db = getDb();
+  ipcLog.debug('Removing tag from task', { taskId, tagId });
+
+  const success = db.prepare('DELETE FROM task_tags WHERE task_id = ? AND tag_id = ?').run(taskId, tagId).changes > 0;
+
+  if (success) {
+    ipcLog.info('Tag removed from task', { taskId, tagId });
+  } else {
+    ipcLog.warn('Tag not removed from task (not found)', { taskId, tagId });
+  }
+
+  return success;
+}
+
+function getTaskTags(taskId: string): Tag[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT t.* FROM tags t
+    JOIN task_tags tt ON tt.tag_id = t.id
+    WHERE tt.task_id = ?
+    ORDER BY t.name
+  `).all(taskId) as Tag[];
+}
+
+// ============================================================================
 // Register IPC Handlers
 // ============================================================================
 
@@ -461,5 +649,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('subtasks:uncomplete', withLogging('subtasks:uncomplete', (_, id: string) => uncompleteSubtask(id)));
   ipcMain.handle('subtasks:delete', withLogging('subtasks:delete', (_, id: string) => deleteSubtask(id)));
 
-  ipcLog.info('IPC handlers registered', { count: 21 });
+  // Tags
+  ipcMain.handle('tags:getAll', withLogging('tags:getAll', () => getTags()));
+  ipcMain.handle('tags:create', withLogging('tags:create', (_, input: CreateTagInput) => createTag(input)));
+  ipcMain.handle('tags:update', withLogging('tags:update', (_, id: string, input: UpdateTagInput) => updateTag(id, input)));
+  ipcMain.handle('tags:delete', withLogging('tags:delete', (_, id: string) => deleteTag(id)));
+  ipcMain.handle('tasks:addTag', withLogging('tasks:addTag', (_, taskId: string, tagId: string) => addTagToTask(taskId, tagId)));
+  ipcMain.handle('tasks:removeTag', withLogging('tasks:removeTag', (_, taskId: string, tagId: string) => removeTagFromTask(taskId, tagId)));
+  ipcMain.handle('tasks:getTags', withLogging('tasks:getTags', (_, taskId: string) => getTaskTags(taskId)));
+
+  ipcLog.info('IPC handlers registered', { count: 28 });
 }

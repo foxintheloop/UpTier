@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { Input } from './ui/input';
@@ -9,9 +9,21 @@ interface QuickAddProps {
   onTaskCreated: () => void;
 }
 
-export function QuickAdd({ listId, onTaskCreated }: QuickAddProps) {
+export interface QuickAddHandle {
+  focus: () => void;
+}
+
+export const QuickAdd = forwardRef<QuickAddHandle, QuickAddProps>(function QuickAdd(
+  { listId, onTaskCreated },
+  ref
+) {
   const [title, setTitle] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+  }));
 
   const createTaskMutation = useMutation({
     mutationFn: (title: string) =>
@@ -42,6 +54,7 @@ export function QuickAdd({ listId, onTaskCreated }: QuickAddProps) {
         <Plus className="h-4 w-4 text-muted-foreground" />
       </div>
       <Input
+        ref={inputRef}
         placeholder="Add a task"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
@@ -57,4 +70,4 @@ export function QuickAdd({ listId, onTaskCreated }: QuickAddProps) {
       />
     </div>
   );
-}
+});
