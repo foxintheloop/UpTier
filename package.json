@@ -1,0 +1,36 @@
+{
+  "name": "uptier",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP-powered To-Do application with intelligent task prioritization",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:electron": "pnpm --filter @uptier/electron dev",
+    "dev:mcp": "pnpm --filter @uptier/mcp-server dev",
+    "build": "pnpm -r build",
+    "build:shared": "pnpm --filter @uptier/shared build",
+    "build:mcp": "pnpm --filter @uptier/mcp-server build",
+    "build:electron": "pnpm --filter @uptier/electron build",
+    "package": "pnpm --filter @uptier/electron package",
+    "clean": "pnpm -r clean",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "keywords": [
+    "mcp",
+    "todo",
+    "task-management",
+    "electron",
+    "claude"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "electron-vite": "^5.0.0"
+  }
+}

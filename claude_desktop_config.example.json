@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "taskforge": {
+      "command": "node",
+      "args": ["C:/Users/Hello/Documents/UpTier/apps/mcp-server/dist/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}

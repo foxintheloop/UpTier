@@ -1,0 +1,29 @@
+{
+  "name": "@uptier/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./schema.sql": "./src/schema.sql"
+  },
+  "files": [
+    "dist",
+    "src/schema.sql"
+  ],
+  "scripts": {
+    "build": "npx tsc",
+    "clean": "npx rimraf dist",
+    "typecheck": "npx tsc --noEmit"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.0",
+    "typescript": "^5.4.0"
+  }
+}
