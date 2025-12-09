@@ -43,3 +43,6 @@ coverage/
 # Misc
 *.tgz
 .cache/
+
+# Misc
+tasklist.md
