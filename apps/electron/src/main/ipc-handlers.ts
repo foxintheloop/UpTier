@@ -1,8 +1,31 @@
 import { ipcMain } from 'electron';
 import { getDb, generateId, nowISO } from './database';
 import { createScopedLogger, createIpcTimer } from './logger';
-import { getSettings, setSettings, getEffectiveTheme } from './settings';
-import type { AppSettings, ThemeMode } from './settings';
+import {
+  getSettings,
+  setSettings,
+  getEffectiveTheme,
+  getDatabaseProfiles,
+  getActiveProfile,
+  setActiveProfile,
+  createDatabaseProfile,
+  updateDatabaseProfile,
+  deleteDatabaseProfile,
+} from './settings';
+import type { AppSettings, ThemeMode, NotificationSettings, DatabaseProfile, CreateProfileInput } from './settings';
+import { switchDatabase, getDbPath } from './database';
+import { notificationScheduler } from './notifications';
+import {
+  exportToJson,
+  exportToCsv,
+  exportToFile,
+  selectImportFile,
+  previewImport,
+  executeImport,
+} from './export-import';
+import type { UpTierExport, ImportPreview, ImportResult } from './export-import';
+import { suggestDueDate, suggestBreakdown, getTaskSuggestions } from './ai-suggestions';
+import type { DueDateSuggestion, BreakdownSuggestion, TaskSuggestions } from './ai-suggestions';
 import type {
   List,
   ListWithCount,
@@ -665,5 +688,40 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('settings:set', withLogging('settings:set', (_, settings: Partial<AppSettings>) => setSettings(settings)));
   ipcMain.handle('settings:getEffectiveTheme', withLogging('settings:getEffectiveTheme', () => getEffectiveTheme()));
 
-  ipcLog.info('IPC handlers registered', { count: 31 });
+  // Notifications
+  ipcMain.handle('notifications:getUpcoming', withLogging('notifications:getUpcoming', (_, limit?: number) => notificationScheduler.getUpcoming(limit)));
+  ipcMain.handle('notifications:snooze', withLogging('notifications:snooze', (_, taskId: string) => notificationScheduler.snooze(taskId)));
+  ipcMain.handle('notifications:dismiss', withLogging('notifications:dismiss', (_, taskId: string) => notificationScheduler.dismiss(taskId)));
+  ipcMain.handle('notifications:getPendingCount', withLogging('notifications:getPendingCount', () => notificationScheduler.getPendingCount()));
+  ipcMain.handle('notifications:setReminderFromDueDate', withLogging('notifications:setReminderFromDueDate', (_, taskId: string, dueDate: string, dueTime?: string | null) => notificationScheduler.setReminderFromDueDate(taskId, dueDate, dueTime)));
+
+  // Export/Import
+  ipcMain.handle('export:json', withLogging('export:json', () => exportToJson()));
+  ipcMain.handle('export:csv', withLogging('export:csv', () => exportToCsv()));
+  ipcMain.handle('export:toFile', withLogging('export:toFile', async (_, format: 'json' | 'csv') => exportToFile(format)));
+  ipcMain.handle('import:selectFile', withLogging('import:selectFile', () => selectImportFile()));
+  ipcMain.handle('import:preview', withLogging('import:preview', async (_, filePath: string) => previewImport(filePath)));
+  ipcMain.handle('import:execute', withLogging('import:execute', async (_, filePath: string, options: { mode: 'merge' | 'replace' }) => executeImport(filePath, options)));
+
+  // Database Profiles
+  ipcMain.handle('database:getProfiles', withLogging('database:getProfiles', () => getDatabaseProfiles()));
+  ipcMain.handle('database:getActiveProfile', withLogging('database:getActiveProfile', () => getActiveProfile()));
+  ipcMain.handle('database:create', withLogging('database:create', (_, input: CreateProfileInput) => createDatabaseProfile(input)));
+  ipcMain.handle('database:update', withLogging('database:update', (_, id: string, updates: Partial<Pick<DatabaseProfile, 'name' | 'color' | 'icon'>>) => updateDatabaseProfile(id, updates)));
+  ipcMain.handle('database:delete', withLogging('database:delete', (_, id: string) => deleteDatabaseProfile(id)));
+  ipcMain.handle('database:switch', withLogging('database:switch', (_, profileId: string) => {
+    const profile = setActiveProfile(profileId);
+    if (!profile) {
+      return { success: false, error: 'Profile not found' };
+    }
+    return switchDatabase(profile);
+  }));
+  ipcMain.handle('database:getCurrentPath', withLogging('database:getCurrentPath', () => getDbPath()));
+
+  // AI Suggestions
+  ipcMain.handle('suggestions:getDueDate', withLogging('suggestions:getDueDate', (_, taskId: string) => suggestDueDate(taskId)));
+  ipcMain.handle('suggestions:getBreakdown', withLogging('suggestions:getBreakdown', (_, taskId: string) => suggestBreakdown(taskId)));
+  ipcMain.handle('suggestions:getAll', withLogging('suggestions:getAll', (_, taskId: string) => getTaskSuggestions(taskId)));
+
+  ipcLog.info('IPC handlers registered', { count: 52 });
 }

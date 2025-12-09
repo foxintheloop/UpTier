@@ -4,6 +4,7 @@ import { initializeDatabase, closeDb, getDbPath } from './database';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createWindowState, saveWindowState, getWindowBounds } from './window-state';
 import { createTray, destroyTray } from './tray';
+import { notificationScheduler } from './notifications';
 import { watch } from 'fs';
 import log, { initializeLogger, createScopedLogger } from './logger';
 
@@ -193,6 +194,10 @@ app.whenReady().then(() => {
   createTray(mainWindow!);
   appLog.info('System tray created');
 
+  // Start notification scheduler
+  notificationScheduler.start(mainWindow!);
+  appLog.info('Notification scheduler started');
+
   // Watch database for external changes
   setupDatabaseWatcher();
 
@@ -221,6 +226,9 @@ app.on('before-quit', () => {
     dbWatcher = null;
     appLog.debug('Database watcher closed');
   }
+
+  notificationScheduler.stop();
+  appLog.debug('Notification scheduler stopped');
 
   destroyTray();
   appLog.debug('Tray destroyed');

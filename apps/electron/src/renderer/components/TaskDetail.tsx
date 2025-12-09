@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -18,14 +18,43 @@ interface TaskDetailProps {
   onUpdate: (task: TaskWithGoals) => void;
 }
 
+interface DueDateSuggestion {
+  suggestedDate: string;
+  confidence: number;
+  reasoning: string;
+  basedOn: string[];
+}
+
+interface SubtaskSuggestion {
+  title: string;
+  estimatedMinutes?: number;
+}
+
+interface BreakdownSuggestion {
+  subtasks: SubtaskSuggestion[];
+  totalEstimatedMinutes: number;
+  reasoning: string;
+}
+
 export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes || '');
+  const [showDueDateSuggestion, setShowDueDateSuggestion] = useState(false);
+  const [showBreakdownSuggestion, setShowBreakdownSuggestion] = useState(false);
+  const [dueDateSuggestion, setDueDateSuggestion] = useState<DueDateSuggestion | null>(null);
+  const [breakdownSuggestion, setBreakdownSuggestion] = useState<BreakdownSuggestion | null>(null);
+  const [loadingDueDate, setLoadingDueDate] = useState(false);
+  const [loadingBreakdown, setLoadingBreakdown] = useState(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
     setTitle(task.title);
     setNotes(task.notes || '');
+    // Reset suggestions when task changes
+    setShowDueDateSuggestion(false);
+    setShowBreakdownSuggestion(false);
+    setDueDateSuggestion(null);
+    setBreakdownSuggestion(null);
   }, [task.id, task.title, task.notes]);
 
   const updateMutation = useMutation({
@@ -53,6 +82,50 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
   const handleTagsChange = () => {
     // Invalidate tasks query to refresh task data with updated tags
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  };
+
+  const handleGetDueDateSuggestion = async () => {
+    setLoadingDueDate(true);
+    setShowDueDateSuggestion(true);
+    try {
+      const suggestion = await window.electronAPI.suggestions.getDueDate(task.id);
+      setDueDateSuggestion(suggestion);
+    } finally {
+      setLoadingDueDate(false);
+    }
+  };
+
+  const handleApplyDueDateSuggestion = async () => {
+    if (dueDateSuggestion) {
+      await updateMutation.mutateAsync({ due_date: dueDateSuggestion.suggestedDate });
+      setShowDueDateSuggestion(false);
+      setDueDateSuggestion(null);
+    }
+  };
+
+  const handleGetBreakdownSuggestion = async () => {
+    setLoadingBreakdown(true);
+    setShowBreakdownSuggestion(true);
+    try {
+      const suggestion = await window.electronAPI.suggestions.getBreakdown(task.id);
+      setBreakdownSuggestion(suggestion);
+    } finally {
+      setLoadingBreakdown(false);
+    }
+  };
+
+  const handleApplyBreakdownSuggestion = async () => {
+    if (breakdownSuggestion) {
+      // Add subtasks
+      for (const subtask of breakdownSuggestion.subtasks) {
+        await window.electronAPI.subtasks.add(task.id, subtask.title);
+      }
+      // Update estimated minutes
+      await updateMutation.mutateAsync({ estimated_minutes: breakdownSuggestion.totalEstimatedMinutes });
+      queryClient.invalidateQueries({ queryKey: ['subtasks', task.id] });
+      setShowBreakdownSuggestion(false);
+      setBreakdownSuggestion(null);
+    }
   };
 
   const tierInfo = task.priority_tier ? PRIORITY_TIERS[task.priority_tier] : null;
@@ -236,6 +309,148 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
               placeholder="Add notes..."
               className="w-full min-h-[100px] p-3 text-sm bg-secondary/30 rounded-md border-0 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
             />
+          </div>
+
+          {/* AI Suggestions */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Smart Suggestions
+            </div>
+
+            <div className="space-y-2">
+              {/* Due Date Suggestion */}
+              {!showDueDateSuggestion ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGetDueDateSuggestion}
+                  disabled={!!task.due_date}
+                  className="w-full justify-start gap-2"
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                  {task.due_date ? 'Due date already set' : 'Suggest Due Date'}
+                </Button>
+              ) : (
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <CalendarPlus className="h-4 w-4" />
+                    Due Date Suggestion
+                  </div>
+                  {loadingDueDate ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Analyzing task patterns...
+                    </div>
+                  ) : dueDateSuggestion ? (
+                    <>
+                      <div className="text-sm">
+                        <span className="font-medium">Suggested: </span>
+                        {format(parseISO(dueDateSuggestion.suggestedDate), 'MMMM d, yyyy')}
+                        <span className="text-xs text-muted-foreground ml-2">
+                          ({Math.round(dueDateSuggestion.confidence * 100)}% confidence)
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{dueDateSuggestion.reasoning}</p>
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          onClick={handleApplyDueDateSuggestion}
+                          className="flex-1 gap-1"
+                        >
+                          <Check className="h-3 w-3" />
+                          Apply
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setShowDueDateSuggestion(false);
+                            setDueDateSuggestion(null);
+                          }}
+                          className="flex-1"
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No suggestion available.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Breakdown Suggestion */}
+              {!showBreakdownSuggestion ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGetBreakdownSuggestion}
+                  className="w-full justify-start gap-2"
+                >
+                  <ListPlus className="h-4 w-4" />
+                  Suggest Task Breakdown
+                </Button>
+              ) : (
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <ListPlus className="h-4 w-4" />
+                    Task Breakdown Suggestion
+                  </div>
+                  {loadingBreakdown ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Analyzing task complexity...
+                    </div>
+                  ) : breakdownSuggestion ? (
+                    <>
+                      <div className="space-y-1">
+                        {breakdownSuggestion.subtasks.map((subtask, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2">
+                              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                              {subtask.title}
+                            </span>
+                            {subtask.estimatedMinutes && (
+                              <span className="text-xs text-muted-foreground">
+                                ~{subtask.estimatedMinutes}m
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-xs text-muted-foreground pt-1">
+                        Total: ~{breakdownSuggestion.totalEstimatedMinutes}m
+                      </div>
+                      <p className="text-xs text-muted-foreground">{breakdownSuggestion.reasoning}</p>
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          onClick={handleApplyBreakdownSuggestion}
+                          className="flex-1 gap-1"
+                        >
+                          <Check className="h-3 w-3" />
+                          Add Subtasks
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setShowBreakdownSuggestion(false);
+                            setBreakdownSuggestion(null);
+                          }}
+                          className="flex-1"
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No breakdown suggested for this task.</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Metadata */}

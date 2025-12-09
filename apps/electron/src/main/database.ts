@@ -3,15 +3,28 @@ import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { DB_FILENAME, DB_DIRECTORY } from '@uptier/shared';
 import { createScopedLogger } from './logger';
+import { getActiveProfile } from './settings';
+import type { DatabaseProfile } from './settings';
 
 const dbLog = createScopedLogger('database');
 
 let db: Database.Database | null = null;
+let currentDbPath: string | null = null;
 
 export function getDbPath(): string {
+  // Use active profile path if available
+  const activeProfile = getActiveProfile();
+  if (activeProfile?.path) {
+    return activeProfile.path;
+  }
+  // Fallback to default path
   const appData = process.env.APPDATA || process.env.HOME || '';
   const dbPath = join(appData, DB_DIRECTORY, DB_FILENAME);
   return dbPath;
+}
+
+export function getCurrentDbPath(): string | null {
+  return currentDbPath;
 }
 
 function ensureDbDirectory(): void {
@@ -46,8 +59,32 @@ function getSchema(): string {
   throw error;
 }
 
+function openDatabase(dbPath: string): Database.Database {
+  dbLog.info('Opening database', { path: dbPath });
+
+  const database = new Database(dbPath);
+  dbLog.info('Database opened successfully');
+
+  // Enable WAL mode for concurrent access
+  database.pragma('journal_mode = WAL');
+  database.pragma('busy_timeout = 5000');
+  database.pragma('foreign_keys = ON');
+  dbLog.debug('Database pragmas set', {
+    journalMode: 'WAL',
+    busyTimeout: 5000,
+    foreignKeys: true,
+  });
+
+  // Run schema
+  const schema = getSchema();
+  database.exec(schema);
+  dbLog.info('Database schema applied');
+
+  return database;
+}
+
 export function initializeDatabase(): Database.Database {
-  if (db) {
+  if (db && currentDbPath === getDbPath()) {
     dbLog.debug('Returning existing database connection');
     return db;
   }
@@ -56,31 +93,53 @@ export function initializeDatabase(): Database.Database {
   ensureDbDirectory();
 
   const dbPath = getDbPath();
-  dbLog.info('Opening database', { path: dbPath });
 
   try {
-    db = new Database(dbPath);
-    dbLog.info('Database opened successfully');
-
-    // Enable WAL mode for concurrent access
-    db.pragma('journal_mode = WAL');
-    db.pragma('busy_timeout = 5000');
-    db.pragma('foreign_keys = ON');
-    dbLog.debug('Database pragmas set', {
-      journalMode: 'WAL',
-      busyTimeout: 5000,
-      foreignKeys: true,
-    });
-
-    // Run schema
-    const schema = getSchema();
-    db.exec(schema);
-    dbLog.info('Database schema applied');
-
+    db = openDatabase(dbPath);
+    currentDbPath = dbPath;
     return db;
   } catch (error) {
     dbLog.error('Database initialization failed', error as Error, { path: dbPath });
     throw error;
+  }
+}
+
+/**
+ * Switch to a different database profile
+ */
+export function switchDatabase(profile: DatabaseProfile): { success: boolean; error?: string } {
+  dbLog.info('Switching database', { profileId: profile.id, profileName: profile.name, path: profile.path });
+
+  try {
+    // Close current database with WAL checkpoint
+    if (db) {
+      dbLog.debug('Checkpointing and closing current database');
+      try {
+        db.pragma('wal_checkpoint(TRUNCATE)');
+      } catch {
+        dbLog.warn('WAL checkpoint failed, proceeding with close');
+      }
+      db.close();
+      db = null;
+      currentDbPath = null;
+    }
+
+    // Ensure directory exists for new database
+    const dbDir = dirname(profile.path);
+    if (!existsSync(dbDir)) {
+      dbLog.info('Creating database directory', { path: dbDir });
+      mkdirSync(dbDir, { recursive: true });
+    }
+
+    // Open new database
+    db = openDatabase(profile.path);
+    currentDbPath = profile.path;
+
+    dbLog.info('Database switched successfully', { profileId: profile.id });
+    return { success: true };
+  } catch (error) {
+    dbLog.error('Failed to switch database', error as Error, { profileId: profile.id });
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
