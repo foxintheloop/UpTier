@@ -7,6 +7,7 @@ import type {
   UpdateTaskInput,
   GetTasksOptions,
   EnergyLevel,
+  Tag,
 } from '@uptier/shared';
 
 // ============================================================================
@@ -214,6 +215,14 @@ export function getTasks(options: GetTasksOptions = {}): TaskWithGoals[] {
     WHERE tg.task_id = ?
   `);
 
+  // Get tags for each task
+  const tagQuery = db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM tags t
+    JOIN task_tags tt ON tt.tag_id = t.id
+    WHERE tt.task_id = ?
+  `);
+
   return tasks.map((task) => {
     const goals = goalQuery.all(task.id) as Array<{
       task_id: string;
@@ -221,6 +230,7 @@ export function getTasks(options: GetTasksOptions = {}): TaskWithGoals[] {
       goal_name: string;
       alignment_strength: number;
     }>;
+    const tags = tagQuery.all(task.id) as Tag[];
 
     return {
       ...rowToTask(task),
@@ -229,6 +239,7 @@ export function getTasks(options: GetTasksOptions = {}): TaskWithGoals[] {
         goal_name: g.goal_name,
         alignment_strength: g.alignment_strength,
       })),
+      tags,
     };
   });
 }
