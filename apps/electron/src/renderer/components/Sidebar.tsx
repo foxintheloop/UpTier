@@ -14,6 +14,8 @@ import {
   Database,
   Check,
   Trash2,
+  MoreVertical,
+  Pencil,
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -52,6 +54,9 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
   const [dbDropdownOpen, setDbDropdownOpen] = useState(false);
   const [showNewDb, setShowNewDb] = useState(false);
   const [newDbName, setNewDbName] = useState('');
+  const [editingListId, setEditingListId] = useState<string | null>(null);
+  const [editingListName, setEditingListName] = useState('');
+  const [listMenuOpen, setListMenuOpen] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -105,6 +110,32 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
     },
   });
 
+  const updateListMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      window.electronAPI.lists.update(id, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      setEditingListId(null);
+      setEditingListName('');
+    },
+  });
+
+  const deleteListMutation = useMutation({
+    mutationFn: (id: string) => window.electronAPI.lists.delete(id),
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      // If deleted list was selected, select first available list or smart list
+      if (selectedListId === deletedId) {
+        const remainingLists = lists.filter((l) => l.id !== deletedId);
+        if (remainingLists.length > 0) {
+          onSelectList(remainingLists[0].id);
+        } else {
+          onSelectList('smart:my_day');
+        }
+      }
+    },
+  });
+
   const handleCreateList = () => {
     if (newListName.trim()) {
       createListMutation.mutate(newListName.trim());
@@ -130,6 +161,29 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
     }
   };
 
+  const handleStartRename = (list: ListWithCount) => {
+    setEditingListId(list.id);
+    setEditingListName(list.name);
+    setListMenuOpen(null);
+  };
+
+  const handleRenameList = (listId: string) => {
+    if (editingListName.trim() && editingListName.trim() !== lists.find(l => l.id === listId)?.name) {
+      updateListMutation.mutate({ id: listId, name: editingListName.trim() });
+    } else {
+      setEditingListId(null);
+      setEditingListName('');
+    }
+  };
+
+  const handleDeleteList = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setListMenuOpen(null);
+    if (window.confirm('Delete this list? Tasks in this list will be moved to the default list.')) {
+      deleteListMutation.mutate(id);
+    }
+  };
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -143,6 +197,20 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
     }
     return () => document.removeEventListener('click', handleClickOutside);
   }, [dbDropdownOpen]);
+
+  // Close list menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.list-menu')) {
+        setListMenuOpen(null);
+      }
+    };
+    if (listMenuOpen) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [listMenuOpen]);
 
   return (
     <div className="w-64 bg-secondary/30 border-r border-border flex flex-col h-full">
@@ -276,27 +344,76 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
             {listsExpanded && (
               <div className="ml-2">
                 {lists.map((list) => (
-                  <button
-                    key={list.id}
-                    onClick={() => onSelectList(list.id)}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
-                      selectedListId === list.id
-                        ? 'bg-accent text-accent-foreground'
-                        : 'hover:bg-accent/50 text-muted-foreground'
+                  <div key={list.id} className="group relative list-menu">
+                    {editingListId === list.id ? (
+                      <div className="px-3 py-2">
+                        <Input
+                          autoFocus
+                          value={editingListName}
+                          onChange={(e) => setEditingListName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameList(list.id);
+                            if (e.key === 'Escape') {
+                              setEditingListId(null);
+                              setEditingListName('');
+                            }
+                          }}
+                          onBlur={() => handleRenameList(list.id)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => onSelectList(list.id)}
+                        className={cn(
+                          'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer',
+                          selectedListId === list.id
+                            ? 'bg-accent text-accent-foreground'
+                            : 'hover:bg-accent/50 text-muted-foreground'
+                        )}
+                      >
+                        <div
+                          className="h-3 w-3 rounded-sm flex-shrink-0"
+                          style={{ backgroundColor: list.color }}
+                        />
+                        <span className="flex-1 text-left truncate">{list.name}</span>
+                        {list.incomplete_count > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            {list.incomplete_count}
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setListMenuOpen(listMenuOpen === list.id ? null : list.id);
+                          }}
+                          className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     )}
-                  >
-                    <div
-                      className="h-3 w-3 rounded-sm"
-                      style={{ backgroundColor: list.color }}
-                    />
-                    <span className="flex-1 text-left truncate">{list.name}</span>
-                    {list.incomplete_count > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {list.incomplete_count}
-                      </span>
+
+                    {/* Dropdown Menu */}
+                    {listMenuOpen === list.id && (
+                      <div className="absolute right-2 top-full mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden min-w-[120px]">
+                        <button
+                          onClick={() => handleStartRename(list)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Rename
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteList(e, list.id)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent text-destructive transition-colors"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Delete
+                        </button>
+                      </div>
                     )}
-                  </button>
+                  </div>
                 ))}
 
                 {/* New List Input */}
