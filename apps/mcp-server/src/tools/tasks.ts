@@ -31,6 +31,8 @@ export const createTaskSchema = z.object({
   energy_required: z.enum(['low', 'medium', 'high']).optional().describe('Energy level required'),
   context_tags: z.array(z.string()).optional().describe('Context tags'),
   goal_ids: z.array(z.string()).optional().describe('Goal IDs to link'),
+  add_to_my_day: z.boolean().optional().describe('Add to My Day smart list (sets due_date to today if not already set)'),
+  mark_important: z.boolean().optional().describe('Mark as important (sets priority_tier to 1 if not already set)'),
 });
 
 export const updateTaskSchema = z.object({
@@ -92,6 +94,8 @@ export const bulkCreateTasksSchema = z.object({
     energy_required: z.enum(['low', 'medium', 'high']).optional(),
     due_date: z.string().optional(),
   })).describe('Array of tasks to create'),
+  add_to_my_day: z.boolean().optional().describe('Add all tasks to My Day smart list (sets due_date to today if not already set)'),
+  mark_important: z.boolean().optional().describe('Mark all tasks as important (sets priority_tier to 1 if not already set)'),
 });
 
 // ============================================================================
@@ -396,12 +400,37 @@ export function bulkCreateTasks(listId: string, tasks: Array<{
 // Tool Definitions for MCP
 // ============================================================================
 
+// Helper to get today's date in YYYY-MM-DD format
+function getTodayDate(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
 export const taskTools = {
   create_task: {
-    description: 'Create a new task in a list',
+    description: `Create a new task in a list. For smart lists:
+- "My Day": Set add_to_my_day=true (sets due_date to today)
+- "Important": Set mark_important=true (sets priority_tier to 1)
+The task still needs a list_id for storage in a regular list.`,
     inputSchema: createTaskSchema,
     handler: (input: z.infer<typeof createTaskSchema>) => {
-      const task = createTask(input as CreateTaskInput);
+      // Apply smart list transformations
+      const taskInput = { ...input } as CreateTaskInput & { add_to_my_day?: boolean; mark_important?: boolean };
+
+      // If add_to_my_day is true, set due_date to today
+      if (taskInput.add_to_my_day && !taskInput.due_date) {
+        taskInput.due_date = getTodayDate();
+      }
+
+      // If mark_important is true, set priority_tier to 1
+      if (taskInput.mark_important && !taskInput.priority_tier) {
+        taskInput.priority_tier = 1;
+      }
+
+      // Remove the smart list flags before passing to createTask
+      delete taskInput.add_to_my_day;
+      delete taskInput.mark_important;
+
+      const task = createTask(taskInput as CreateTaskInput);
       return { success: true, task };
     },
   },
@@ -477,10 +506,30 @@ export const taskTools = {
   },
 
   bulk_create_tasks: {
-    description: 'Create multiple tasks at once in a list',
+    description: `Create multiple tasks at once in a list. For smart lists:
+- "My Day": Set add_to_my_day=true (sets due_date to today for all tasks)
+- "Important": Set mark_important=true (sets priority_tier to 1 for all tasks)
+The tasks still need a list_id for storage in a regular list.`,
     inputSchema: bulkCreateTasksSchema,
     handler: (input: z.infer<typeof bulkCreateTasksSchema>) => {
-      const tasks = bulkCreateTasks(input.list_id, input.tasks);
+      // Apply smart list transformations to each task
+      const transformedTasks = input.tasks.map(task => {
+        const transformed = { ...task };
+
+        // If add_to_my_day is true, set due_date to today
+        if (input.add_to_my_day && !transformed.due_date) {
+          transformed.due_date = getTodayDate();
+        }
+
+        // If mark_important is true, set priority_tier to 1
+        if (input.mark_important && !transformed.priority_tier) {
+          transformed.priority_tier = 1;
+        }
+
+        return transformed;
+      });
+
+      const tasks = bulkCreateTasks(input.list_id, transformedTasks);
       return { success: true, tasks, count: tasks.length };
     },
   },
