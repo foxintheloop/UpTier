@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getDb, generateId, nowISO } from '../database.js';
+import { notifyChange } from '../changelog.js';
 import type { List, ListWithCount, CreateListInput, UpdateListInput } from '@uptier/shared';
 import { DEFAULT_LIST_ICON, DEFAULT_LIST_COLOR } from '@uptier/shared';
 
@@ -172,6 +173,7 @@ export const listTools = {
     inputSchema: createListSchema,
     handler: (input: z.infer<typeof createListSchema>) => {
       const list = createList(input);
+      notifyChange('list', 'create', list.id);
       return { success: true, list };
     },
   },
@@ -194,6 +196,7 @@ export const listTools = {
       if (!list) {
         return { success: false, error: 'List not found' };
       }
+      notifyChange('list', 'update', id);
       return { success: true, list };
     },
   },
@@ -206,6 +209,7 @@ export const listTools = {
       if (!deleted) {
         return { success: false, error: 'List not found or is a smart list' };
       }
+      notifyChange('list', 'delete', input.id);
       return { success: true };
     },
   },
@@ -215,6 +219,7 @@ export const listTools = {
     inputSchema: reorderListsSchema,
     handler: (input: z.infer<typeof reorderListsSchema>) => {
       reorderLists(input.list_ids);
+      notifyChange('list', 'update');
       return { success: true };
     },
   },

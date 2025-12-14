@@ -75,6 +75,10 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['subtasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+      queryClient.invalidateQueries({ queryKey: ['database-profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['database-active'] });
     });
 
     return unsubscribe;

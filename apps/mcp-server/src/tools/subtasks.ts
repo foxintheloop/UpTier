@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getDb, generateId, nowISO } from '../database.js';
+import { notifyChange } from '../changelog.js';
 import type { Subtask } from '@uptier/shared';
 
 // ============================================================================
@@ -126,6 +127,7 @@ export const subtaskTools = {
     inputSchema: addSubtaskSchema,
     handler: (input: z.infer<typeof addSubtaskSchema>) => {
       const subtask = addSubtask(input.task_id, input.title);
+      notifyChange('subtask', 'create', subtask.id);
       return { success: true, subtask };
     },
   },
@@ -150,6 +152,7 @@ export const subtaskTools = {
       if (!subtask) {
         return { success: false, error: 'Subtask not found' };
       }
+      notifyChange('subtask', 'update', input.id);
       return { success: true, subtask };
     },
   },
@@ -162,6 +165,7 @@ export const subtaskTools = {
       if (!deleted) {
         return { success: false, error: 'Subtask not found' };
       }
+      notifyChange('subtask', 'delete', input.id);
       return { success: true };
     },
   },
@@ -174,6 +178,7 @@ export const subtaskTools = {
       if (!subtask) {
         return { success: false, error: 'Subtask not found' };
       }
+      notifyChange('subtask', 'complete', input.id);
       return { success: true, subtask };
     },
   },
@@ -186,6 +191,7 @@ export const subtaskTools = {
       if (!subtask) {
         return { success: false, error: 'Subtask not found' };
       }
+      notifyChange('subtask', 'update', input.id);
       return { success: true, subtask };
     },
   },
@@ -195,6 +201,7 @@ export const subtaskTools = {
     inputSchema: reorderSubtasksSchema,
     handler: (input: z.infer<typeof reorderSubtasksSchema>) => {
       reorderSubtasks(input.task_id, input.subtask_ids);
+      notifyChange('subtask', 'update');
       return { success: true };
     },
   },

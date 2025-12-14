@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getDb, generateId, nowISO } from '../database.js';
+import { notifyChange } from '../changelog.js';
 import type {
   Goal,
   GoalWithProgress,
@@ -273,6 +274,7 @@ export const goalTools = {
     inputSchema: createGoalSchema,
     handler: (input: z.infer<typeof createGoalSchema>) => {
       const goal = createGoal(input);
+      notifyChange('goal', 'create', goal.id);
       return { success: true, goal };
     },
   },
@@ -300,6 +302,7 @@ export const goalTools = {
       if (!goal) {
         return { success: false, error: 'Goal not found' };
       }
+      notifyChange('goal', 'update', id);
       return { success: true, goal };
     },
   },
@@ -312,6 +315,7 @@ export const goalTools = {
       if (!deleted) {
         return { success: false, error: 'Goal not found' };
       }
+      notifyChange('goal', 'delete', input.id);
       return { success: true };
     },
   },
@@ -321,6 +325,7 @@ export const goalTools = {
     inputSchema: linkTasksToGoalSchema,
     handler: (input: z.infer<typeof linkTasksToGoalSchema>) => {
       const result = linkTasksToGoal(input.goal_id, input.task_ids, input.alignment_strength);
+      notifyChange('goal', 'update', input.goal_id);
       return { success: true, ...result };
     },
   },
@@ -330,6 +335,7 @@ export const goalTools = {
     inputSchema: unlinkTasksFromGoalSchema,
     handler: (input: z.infer<typeof unlinkTasksFromGoalSchema>) => {
       const result = unlinkTasksFromGoal(input.goal_id, input.task_ids);
+      notifyChange('goal', 'update', input.goal_id);
       return { success: true, ...result };
     },
   },

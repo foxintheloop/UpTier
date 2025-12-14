@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getDb, generateId, nowISO } from '../database.js';
+import { notifyChange } from '../changelog.js';
 import type {
   Task,
   TaskWithGoals,
@@ -431,6 +432,7 @@ The task still needs a list_id for storage in a regular list.`,
       delete taskInput.mark_important;
 
       const task = createTask(taskInput as CreateTaskInput);
+      notifyChange('task', 'create', task.id);
       return { success: true, task };
     },
   },
@@ -453,6 +455,7 @@ The task still needs a list_id for storage in a regular list.`,
       if (!task) {
         return { success: false, error: 'Task not found' };
       }
+      notifyChange('task', 'update', id);
       return { success: true, task };
     },
   },
@@ -465,6 +468,7 @@ The task still needs a list_id for storage in a regular list.`,
       if (!deleted) {
         return { success: false, error: 'Task not found' };
       }
+      notifyChange('task', 'delete', input.id);
       return { success: true };
     },
   },
@@ -477,6 +481,7 @@ The task still needs a list_id for storage in a regular list.`,
       if (!task) {
         return { success: false, error: 'Task not found' };
       }
+      notifyChange('task', 'complete', input.id);
       return { success: true, task };
     },
   },
@@ -489,6 +494,7 @@ The task still needs a list_id for storage in a regular list.`,
       if (!task) {
         return { success: false, error: 'Task not found' };
       }
+      notifyChange('task', 'update', input.id);
       return { success: true, task };
     },
   },
@@ -501,6 +507,7 @@ The task still needs a list_id for storage in a regular list.`,
       if (!task) {
         return { success: false, error: 'Task not found' };
       }
+      notifyChange('task', 'update', input.id);
       return { success: true, task };
     },
   },
@@ -530,6 +537,7 @@ The tasks still need a list_id for storage in a regular list.`,
       });
 
       const tasks = bulkCreateTasks(input.list_id, transformedTasks);
+      notifyChange('task', 'bulk');
       return { success: true, tasks, count: tasks.length };
     },
   },

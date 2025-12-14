@@ -1,16 +1,23 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
+import { join } from 'path';
+import { homedir } from 'os';
 import { initializeDatabase, closeDb, getDbPath } from './database';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createWindowState, saveWindowState, getWindowBounds } from './window-state';
 import { createTray, destroyTray } from './tray';
 import { notificationScheduler } from './notifications';
-import { watch } from 'fs';
+import { watch, existsSync, mkdirSync, writeFileSync } from 'fs';
 import log, { initializeLogger, createScopedLogger } from './logger';
+
+// Changelog file path for MCP server notifications
+const CHANGELOG_DIR = join(homedir(), '.uptier');
+const CHANGELOG_PATH = join(CHANGELOG_DIR, 'db.changelog');
 
 const appLog = createScopedLogger('app');
 let mainWindow: BrowserWindow | null = null;
 let dbWatcher: ReturnType<typeof watch> | null = null;
+let dbChangeTimeout: NodeJS.Timeout | null = null;
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -128,19 +135,62 @@ function createWindow(): void {
 
 function setupDatabaseWatcher(): void {
   const dbPath = getDbPath();
-  appLog.info('Setting up database watcher', { dbPath });
+  appLog.info('Setting up database watcher (fallback)', { dbPath });
 
   try {
     // Watch for external database changes (from MCP server)
     dbWatcher = watch(dbPath, (eventType) => {
       if (eventType === 'change' && mainWindow) {
-        appLog.debug('Database file changed externally, notifying renderer');
-        mainWindow.webContents.send('database-changed');
+        // Debounce: wait 300ms after last change before notifying
+        // This handles SQLite WAL mode which fires multiple events per write
+        if (dbChangeTimeout) {
+          clearTimeout(dbChangeTimeout);
+        }
+        dbChangeTimeout = setTimeout(() => {
+          appLog.debug('Database file changed externally, notifying renderer');
+          mainWindow?.webContents.send('database-changed');
+          dbChangeTimeout = null;
+        }, 300);
       }
     });
     appLog.info('Database watcher established successfully');
   } catch (error) {
     appLog.error('Failed to set up database watcher', error as Error);
+  }
+}
+
+function setupChangelogWatcher(): void {
+  appLog.info('Setting up changelog watcher for near-instant updates', { path: CHANGELOG_PATH });
+
+  try {
+    // Ensure changelog directory and file exist
+    if (!existsSync(CHANGELOG_DIR)) {
+      mkdirSync(CHANGELOG_DIR, { recursive: true });
+    }
+    if (!existsSync(CHANGELOG_PATH)) {
+      writeFileSync(CHANGELOG_PATH, '');
+    }
+
+    // Watch changelog with minimal debounce (50ms) - single file write = single event
+    dbWatcher = watch(CHANGELOG_PATH, (eventType) => {
+      if (eventType === 'change' && mainWindow) {
+        if (dbChangeTimeout) {
+          clearTimeout(dbChangeTimeout);
+        }
+        dbChangeTimeout = setTimeout(() => {
+          appLog.debug('Changelog updated, notifying renderer');
+          mainWindow?.webContents.send('database-changed');
+          dbChangeTimeout = null;
+        }, 50); // Only 50ms debounce needed for changelog
+      }
+    });
+
+    appLog.info('Changelog watcher established successfully');
+  } catch (error) {
+    appLog.error('Failed to set up changelog watcher', error as Error);
+    // Fallback to database watcher
+    appLog.info('Falling back to database watcher');
+    setupDatabaseWatcher();
   }
 }
 
@@ -198,8 +248,9 @@ app.whenReady().then(() => {
   notificationScheduler.start(mainWindow!);
   appLog.info('Notification scheduler started');
 
-  // Watch database for external changes
-  setupDatabaseWatcher();
+  // Watch changelog for external changes (MCP server writes here)
+  // Falls back to database watcher if changelog watching fails
+  setupChangelogWatcher();
 
   app.on('activate', () => {
     appLog.info('App activated');
@@ -221,6 +272,11 @@ app.on('before-quit', () => {
   appLog.info('Application before-quit event');
 
   // Clean up
+  if (dbChangeTimeout) {
+    clearTimeout(dbChangeTimeout);
+    dbChangeTimeout = null;
+  }
+
   if (dbWatcher) {
     dbWatcher.close();
     dbWatcher = null;

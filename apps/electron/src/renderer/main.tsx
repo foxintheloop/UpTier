@@ -17,14 +17,14 @@ appLogger.info('Renderer starting', {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60, // 1 minute
+      staleTime: 1000 * 10, // 10 seconds - short for responsive MCP updates
       refetchOnWindowFocus: true,
     },
   },
 });
 
 appLogger.debug('QueryClient configured', {
-  staleTime: '1 minute',
+  staleTime: '10 seconds',
   refetchOnWindowFocus: true,
 });
 
