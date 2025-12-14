@@ -33,8 +33,8 @@ function createWindow(): void {
 
   mainWindow = new BrowserWindow({
     ...bounds,
-    minWidth: 800,
-    minHeight: 600,
+    minWidth: 400,
+    minHeight: 400,
     title: 'UpTier',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),

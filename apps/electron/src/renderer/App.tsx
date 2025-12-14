@@ -26,8 +26,24 @@ export default function App() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskWithGoals | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
+
+  // Track window width for responsive behavior
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Auto-collapse sidebar at small widths
+  useEffect(() => {
+    if (windowWidth < 550 && !sidebarCollapsed) {
+      setSidebarCollapsed(true);
+    }
+  }, [windowWidth, sidebarCollapsed]);
 
   // Load and apply theme on mount
   useEffect(() => {
@@ -186,6 +202,8 @@ export default function App() {
           setSelectedTask(null);
         }}
         onSettingsClick={() => setSettingsOpen(true)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* Main Content */}

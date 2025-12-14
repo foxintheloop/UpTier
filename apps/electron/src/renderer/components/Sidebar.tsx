@@ -11,11 +11,14 @@ import {
   Settings,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Database,
   Check,
   Trash2,
   MoreVertical,
   Pencil,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -37,6 +40,8 @@ interface SidebarProps {
   onSelectList: (id: string) => void;
   onSettingsClick: () => void;
   onDatabaseSwitch?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 const SMART_LISTS = [
@@ -46,7 +51,7 @@ const SMART_LISTS = [
   { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 
-export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatabaseSwitch }: SidebarProps) {
+export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatabaseSwitch, collapsed = false, onToggleCollapse }: SidebarProps) {
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listsExpanded, setListsExpanded] = useState(true);
@@ -213,23 +218,41 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
   }, [listMenuOpen]);
 
   return (
-    <div className="w-64 bg-secondary/30 border-r border-border flex flex-col h-full">
+    <div className={cn(
+      "bg-secondary/30 border-r border-border flex flex-col h-full transition-all duration-200",
+      collapsed ? "w-14" : "w-64"
+    )}>
       {/* Header */}
-      <div className="p-4 border-b border-border">
-        <h1 className="text-xl font-bold text-primary">UpTier</h1>
+      <div className={cn("border-b border-border", collapsed ? "p-2" : "p-4")}>
+        <div className="flex items-center justify-between">
+          {!collapsed && <h1 className="text-xl font-bold text-primary">UpTier</h1>}
+          {onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              className={cn(
+                "p-1.5 rounded-md hover:bg-accent transition-colors",
+                collapsed && "mx-auto"
+              )}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
+          )}
+        </div>
 
         {/* Database Switcher */}
-        <div className="db-switcher relative mt-2">
-          <button
-            onClick={() => setDbDropdownOpen(!dbDropdownOpen)}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs bg-secondary/50 hover:bg-secondary border border-border transition-colors"
-          >
-            <Database className="h-3 w-3" style={{ color: activeDbProfile?.color || '#6366f1' }} />
-            <span className="flex-1 text-left truncate text-muted-foreground">
-              {activeDbProfile?.name || 'Default'}
-            </span>
-            <ChevronDown className={cn('h-3 w-3 transition-transform', dbDropdownOpen && 'rotate-180')} />
-          </button>
+        {!collapsed && (
+          <div className="db-switcher relative mt-2">
+            <button
+              onClick={() => setDbDropdownOpen(!dbDropdownOpen)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs bg-secondary/50 hover:bg-secondary border border-border transition-colors"
+            >
+              <Database className="h-3 w-3" style={{ color: activeDbProfile?.color || '#6366f1' }} />
+              <span className="flex-1 text-left truncate text-muted-foreground">
+                {activeDbProfile?.name || 'Default'}
+              </span>
+              <ChevronDown className={cn('h-3 w-3 transition-transform', dbDropdownOpen && 'rotate-180')} />
+            </button>
 
           {dbDropdownOpen && (
             <div className="absolute left-0 right-0 top-full mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden">
@@ -296,11 +319,12 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
               </div>
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-2">
+        <div className={cn("p-2", collapsed && "px-1")}>
           {/* Smart Lists */}
           <div className="mb-4">
             {SMART_LISTS.map((smartList) => (
@@ -308,17 +332,19 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
                 key={smartList.id}
                 onClick={() => onSelectList(smartList.id)}
                 className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                  'w-full flex items-center rounded-md text-sm transition-colors',
+                  collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
                   selectedListId === smartList.id
                     ? 'bg-accent text-accent-foreground'
                     : 'hover:bg-accent/50 text-muted-foreground'
                 )}
+                title={collapsed ? smartList.name : undefined}
               >
                 <smartList.icon
-                  className="h-4 w-4"
+                  className="h-4 w-4 flex-shrink-0"
                   style={{ color: smartList.color }}
                 />
-                <span>{smartList.name}</span>
+                {!collapsed && <span>{smartList.name}</span>}
               </button>
             ))}
           </div>
@@ -328,24 +354,26 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
 
           {/* User Lists */}
           <div className="mb-4">
-            <button
-              onClick={() => setListsExpanded(!listsExpanded)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-            >
-              {listsExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-              <List className="h-4 w-4" />
-              <span>Lists</span>
-            </button>
+            {!collapsed && (
+              <button
+                onClick={() => setListsExpanded(!listsExpanded)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                {listsExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+                <List className="h-4 w-4" />
+                <span>Lists</span>
+              </button>
+            )}
 
-            {listsExpanded && (
-              <div className="ml-2">
+            {(collapsed || listsExpanded) && (
+              <div className={cn(!collapsed && "ml-2")}>
                 {lists.map((list) => (
                   <div key={list.id} className="group relative list-menu">
-                    {editingListId === list.id ? (
+                    {editingListId === list.id && !collapsed ? (
                       <div className="px-3 py-2">
                         <Input
                           autoFocus
@@ -366,31 +394,37 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
                       <div
                         onClick={() => onSelectList(list.id)}
                         className={cn(
-                          'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer',
+                          'w-full flex items-center rounded-md text-sm transition-colors cursor-pointer',
+                          collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
                           selectedListId === list.id
                             ? 'bg-accent text-accent-foreground'
                             : 'hover:bg-accent/50 text-muted-foreground'
                         )}
+                        title={collapsed ? list.name : undefined}
                       >
                         <div
-                          className="h-3 w-3 rounded-sm flex-shrink-0"
+                          className={cn("rounded-sm flex-shrink-0", collapsed ? "h-4 w-4" : "h-3 w-3")}
                           style={{ backgroundColor: list.color }}
                         />
-                        <span className="flex-1 text-left truncate">{list.name}</span>
-                        {list.incomplete_count > 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            {list.incomplete_count}
-                          </span>
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1 text-left truncate">{list.name}</span>
+                            {list.incomplete_count > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                {list.incomplete_count}
+                              </span>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setListMenuOpen(listMenuOpen === list.id ? null : list.id);
+                              }}
+                              className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </>
                         )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setListMenuOpen(listMenuOpen === list.id ? null : list.id);
-                          }}
-                          className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
-                        >
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </button>
                       </div>
                     )}
 
@@ -417,35 +451,49 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
                 ))}
 
                 {/* New List Input */}
-                {showNewList ? (
-                  <div className="px-3 py-2">
-                    <Input
-                      autoFocus
-                      placeholder="List name"
-                      value={newListName}
-                      onChange={(e) => setNewListName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleCreateList();
-                        if (e.key === 'Escape') {
-                          setShowNewList(false);
-                          setNewListName('');
-                        }
-                      }}
-                      onBlur={() => {
-                        if (!newListName.trim()) {
-                          setShowNewList(false);
-                        }
-                      }}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                ) : (
+                {!collapsed && (
+                  showNewList ? (
+                    <div className="px-3 py-2">
+                      <Input
+                        autoFocus
+                        placeholder="List name"
+                        value={newListName}
+                        onChange={(e) => setNewListName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleCreateList();
+                          if (e.key === 'Escape') {
+                            setShowNewList(false);
+                            setNewListName('');
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!newListName.trim()) {
+                            setShowNewList(false);
+                          }
+                        }}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowNewList(true)}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>New List</span>
+                    </button>
+                  )
+                )}
+                {collapsed && (
                   <button
-                    onClick={() => setShowNewList(true)}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    onClick={() => {
+                      if (onToggleCollapse) onToggleCollapse();
+                      setShowNewList(true);
+                    }}
+                    className="w-full flex items-center justify-center p-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    title="New List"
                   >
                     <Plus className="h-4 w-4" />
-                    <span>New List</span>
                   </button>
                 )}
               </div>
@@ -457,38 +505,53 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
 
           {/* Goals */}
           <div>
-            <button
-              onClick={() => setGoalsExpanded(!goalsExpanded)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-            >
-              {goalsExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-              <Target className="h-4 w-4" />
-              <span>Goals</span>
-            </button>
+            {collapsed ? (
+              <button
+                className="w-full flex items-center justify-center p-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                title="Goals (Coming soon)"
+              >
+                <Target className="h-4 w-4" />
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setGoalsExpanded(!goalsExpanded)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  {goalsExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                  <Target className="h-4 w-4" />
+                  <span>Goals</span>
+                </button>
 
-            {goalsExpanded && (
-              <div className="ml-2 px-3 py-2 text-sm text-muted-foreground">
-                <p>Coming soon...</p>
-              </div>
+                {goalsExpanded && (
+                  <div className="ml-2 px-3 py-2 text-sm text-muted-foreground">
+                    <p>Coming soon...</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
       </ScrollArea>
 
       {/* Footer */}
-      <div className="p-2 border-t border-border">
+      <div className={cn("border-t border-border", collapsed ? "p-1" : "p-2")}>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2"
+          className={cn(
+            "w-full",
+            collapsed ? "justify-center p-2" : "justify-start gap-2"
+          )}
           onClick={onSettingsClick}
+          title={collapsed ? "Settings" : undefined}
         >
           <Settings className="h-4 w-4" />
-          Settings
+          {!collapsed && "Settings"}
         </Button>
       </div>
     </div>
