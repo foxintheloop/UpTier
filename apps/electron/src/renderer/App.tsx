@@ -10,6 +10,9 @@ import type { TaskWithGoals } from '@uptier/shared';
 
 type ThemeMode = 'dark' | 'light' | 'system';
 
+const SIDEBAR_WIDTH_KEY = 'uptier-sidebar-width';
+const DEFAULT_SIDEBAR_WIDTH = 256;
+
 // Apply theme to document
 function applyTheme(theme: ThemeMode) {
   const effectiveTheme = theme === 'system'
@@ -27,9 +30,19 @@ export default function App() {
   const [selectedTask, setSelectedTask] = useState<TaskWithGoals | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    return saved ? parseInt(saved, 10) : DEFAULT_SIDEBAR_WIDTH;
+  });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
+
+  // Save sidebar width to localStorage when it changes
+  const handleSidebarWidthChange = useCallback((width: number) => {
+    setSidebarWidth(width);
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width));
+  }, []);
 
   // Track window width for responsive behavior
   useEffect(() => {
@@ -208,6 +221,8 @@ export default function App() {
         onSettingsClick={() => setSettingsOpen(true)}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        width={sidebarWidth}
+        onWidthChange={handleSidebarWidthChange}
       />
 
       {/* Main Content */}

@@ -42,7 +42,13 @@ interface SidebarProps {
   onDatabaseSwitch?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  width?: number;
+  onWidthChange?: (width: number) => void;
 }
+
+const MIN_SIDEBAR_WIDTH = 180;
+const MAX_SIDEBAR_WIDTH = 400;
+const DEFAULT_SIDEBAR_WIDTH = 256;
 
 const SMART_LISTS = [
   { id: 'smart:my_day', name: 'My Day', icon: Sun, color: '#f59e0b' },
@@ -51,7 +57,7 @@ const SMART_LISTS = [
   { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 
-export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatabaseSwitch, collapsed = false, onToggleCollapse }: SidebarProps) {
+export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatabaseSwitch, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listsExpanded, setListsExpanded] = useState(true);
@@ -62,6 +68,7 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editingListName, setEditingListName] = useState('');
   const [listMenuOpen, setListMenuOpen] = useState<string | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -217,11 +224,58 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
     return () => document.removeEventListener('click', handleClickOutside);
   }, [listMenuOpen]);
 
+  // Handle sidebar resize
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, e.clientX));
+      onWidthChange?.(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, onWidthChange]);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
   return (
-    <div className={cn(
-      "bg-secondary/30 border-r border-border flex flex-col h-full transition-all duration-200",
-      collapsed ? "w-14" : "w-64"
-    )}>
+    <div
+      className={cn(
+        "bg-secondary/30 border-r border-border flex flex-col h-full relative",
+        collapsed && "w-14",
+        !isResizing && "transition-all duration-200"
+      )}
+      style={!collapsed ? { width: `${width}px` } : undefined}
+    >
+      {/* Resize Handle */}
+      {!collapsed && (
+        <div
+          className={cn(
+            "absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/30 transition-colors",
+            isResizing && "bg-primary/50"
+          )}
+          onMouseDown={handleResizeStart}
+        />
+      )}
       {/* Header */}
       <div className={cn("border-b border-border", collapsed ? "p-2" : "p-4")}>
         <div className="flex items-center justify-between">
