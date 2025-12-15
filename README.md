@@ -82,6 +82,9 @@ pnpm install
 # Approve build scripts for canvas and sharp if needed
 pnpm approve-builds
 
+# Rebuild to trigger the postinstall scripts
+pnpm rebuild
+
 # Build shared package
 pnpm --filter @uptier/shared build
 
@@ -235,6 +238,43 @@ Application logs are stored at:
 - [ ] Calendar integration
 - [ ] Task templates
 - [ ] Mobile companion app
+
+## Troubleshooting
+
+### "Electron uninstall" error
+
+If you see `Error: Electron uninstall` when running `pnpm dev:electron`, the Electron binary wasn't downloaded. Run:
+
+```bash
+node node_modules/electron/install.js
+```
+
+### Native module errors with MCP server
+
+If Claude Desktop shows errors about `better-sqlite3`, you may need to rebuild it for Node.js 23 (which Claude Desktop uses internally):
+
+```bash
+# Install fnm (Fast Node Manager)
+# See: https://github.com/Schniz/fnm
+
+# Switch to Node.js 23
+fnm install 23
+fnm use 23
+
+# Rebuild the MCP server's native modules
+cd apps/mcp-server
+pnpm rebuild
+```
+
+### Build script warnings
+
+If you see warnings about "Ignored build scripts" during `pnpm install`, run:
+
+```bash
+pnpm approve-builds
+```
+
+Then select the packages that need to run build scripts (canvas, sharp, electron).
 
 ## Contributing
 
