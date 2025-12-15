@@ -2,7 +2,11 @@ import Database from 'better-sqlite3';
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import { DB_FILENAME, DB_DIRECTORY } from '@uptier/shared';
+
+// ESM compatibility: create require function for resolving package paths
+const require = createRequire(import.meta.url);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,26 +35,47 @@ export function ensureDbDirectory(): void {
 }
 
 /**
+ * Try to resolve schema.sql using require.resolve
+ * This works for npm-installed packages (both @uptier/shared and aliased versions)
+ */
+function tryResolveSchema(): string | null {
+  try {
+    // This will work when installed from npm (resolves the package export)
+    return require.resolve('@uptier/shared/schema.sql');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Get the schema SQL from the shared package
  */
 function getSchema(): string {
   // Try multiple paths to find schema.sql
-  // Order: standalone deployment, monorepo node_modules, monorepo packages
-  const possiblePaths = [
-    join(__dirname, 'node_modules/@uptier/shared/src/schema.sql'), // Standalone deployment (npm file: dep)
-    join(__dirname, '../shared/src/schema.sql'), // Standalone deployment (direct copy)
+  // Order: npm-installed packages, standalone deployment, monorepo packages
+  const possiblePaths: (string | null)[] = [
+    // npm-installed: try to resolve via package exports
+    tryResolveSchema(),
+    // Standalone deployment (npm file: dep)
+    join(__dirname, 'node_modules/@uptier/shared/src/schema.sql'),
+    // Standalone deployment (direct copy)
+    join(__dirname, '../shared/src/schema.sql'),
+    // Monorepo node_modules
     join(__dirname, '../../node_modules/@uptier/shared/src/schema.sql'),
+    // Monorepo packages
     join(__dirname, '../../../packages/shared/src/schema.sql'),
     join(__dirname, '../../../../packages/shared/src/schema.sql'),
   ];
 
-  for (const schemaPath of possiblePaths) {
+  const validPaths = possiblePaths.filter((p): p is string => p !== null);
+
+  for (const schemaPath of validPaths) {
     if (existsSync(schemaPath)) {
       return readFileSync(schemaPath, 'utf-8');
     }
   }
 
-  throw new Error('Could not find schema.sql');
+  throw new Error('Could not find schema.sql. Searched paths:\n' + validPaths.join('\n'));
 }
 
 /**

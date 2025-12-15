@@ -1,0 +1,66 @@
+{
+  "$schema": "https://registry.modelcontextprotocol.io/schemas/mcp.json",
+  "name": "io.github.foxintheloop/uptier",
+  "description": "AI-powered task management with smart prioritization and goal alignment. Create, organize, and prioritize tasks using the Eisenhower Matrix with 25+ MCP tools.",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foxintheloop/uptier"
+  },
+  "homepage": "https://github.com/foxintheloop/uptier",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "foxintheloop"
+    }
+  ],
+  "packages": {
+    "npm": "@foxintheloop/uptier-mcp"
+  },
+  "tools": [
+    "create_task",
+    "get_tasks",
+    "update_task",
+    "delete_task",
+    "complete_task",
+    "bulk_create_tasks",
+    "create_list",
+    "get_lists",
+    "update_list",
+    "delete_list",
+    "create_goal",
+    "get_goals",
+    "update_goal",
+    "delete_goal",
+    "link_task_to_goal",
+    "unlink_task_from_goal",
+    "create_subtask",
+    "get_subtasks",
+    "update_subtask",
+    "delete_subtask",
+    "complete_subtask",
+    "get_priority_matrix",
+    "auto_prioritize_task",
+    "suggest_next_task",
+    "get_task_suggestions"
+  ],
+  "categories": [
+    "productivity",
+    "task-management"
+  ],
+  "keywords": [
+    "tasks",
+    "todo",
+    "productivity",
+    "prioritization",
+    "eisenhower-matrix",
+    "goals",
+    "planning"
+  ],
+  "installation": {
+    "npm": {
+      "command": "npx",
+      "args": ["-y", "@foxintheloop/uptier-mcp"]
+    }
+  }
+}

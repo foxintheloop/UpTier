@@ -1,23 +1,42 @@
 {
-  "name": "@uptier/mcp-server",
+  "name": "@foxintheloop/uptier-mcp",
   "version": "1.0.0",
-  "private": true,
+  "description": "MCP server for UpTier - AI-powered task prioritization with goal alignment",
+  "mcpName": "io.github.foxintheloop/uptier",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
     "uptier-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foxintheloop/uptier.git",
+    "directory": "apps/mcp-server"
+  },
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "claude",
+    "task-management",
+    "ai",
+    "uptier",
+    "model-context-protocol"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit",
-    "deploy": "node ../../scripts/deploy-mcp.js"
+    "deploy": "node ../../scripts/deploy-mcp.js",
+    "publish:npm": "node ../../scripts/publish-mcp.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
     "@uptier/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "better-sqlite3": "^11.10.0",
     "pino": "^10.1.0",
     "zod": "^3.23.0"

@@ -1,7 +1,8 @@
 {
-  "name": "@uptier/shared",
+  "name": "@foxintheloop/uptier-shared",
   "version": "1.0.0",
-  "private": true,
+  "description": "Shared types and constants for UpTier task management",
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -16,6 +17,18 @@
   "files": [
     "dist",
     "src/schema.sql"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foxintheloop/uptier.git",
+    "directory": "packages/shared"
+  },
+  "license": "MIT",
+  "keywords": [
+    "uptier",
+    "mcp",
+    "task-management",
+    "types"
   ],
   "scripts": {
     "build": "tsc",
