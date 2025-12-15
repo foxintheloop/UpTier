@@ -15,12 +15,16 @@ console.log('[dev.js] Clearing ELECTRON_RUN_AS_NODE from environment');
 const cleanEnv = { ...process.env };
 delete cleanEnv.ELECTRON_RUN_AS_NODE;
 
-// Use npx to run electron-vite
-const child = spawn('npx', ['electron-vite', 'dev', ...process.argv.slice(2)], {
+// Run electron-vite directly from root node_modules/.bin (pnpm hoists it there)
+const isWindows = process.platform === 'win32';
+const rootDir = path.join(__dirname, '..', '..', '..');
+const electronViteBin = path.join(rootDir, 'node_modules', '.bin', isWindows ? 'electron-vite.cmd' : 'electron-vite');
+
+const child = spawn(electronViteBin, ['dev', ...process.argv.slice(2)], {
   stdio: 'inherit',
   cwd: path.dirname(__dirname),
   env: cleanEnv,
-  shell: true,
+  shell: isWindows,
 });
 
 child.on('exit', (code) => {
