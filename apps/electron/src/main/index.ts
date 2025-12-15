@@ -43,6 +43,7 @@ function createWindow(): void {
     minWidth: 400,
     minHeight: 400,
     title: 'UpTier',
+    icon: path.join(__dirname, '../../build/icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
