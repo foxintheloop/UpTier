@@ -9,7 +9,7 @@ UpTier is a desktop to-do application that combines a clean Microsoft To Do-styl
 
 ## Demo
 
-https://github.com/user-attachments/assets/0d89b6df-8b85-49b0-a77d-10cd55d3613f
+https://github.com/user-attachments/assets/71264f79-3f54-4b45-9d7e-dcef26f54f94
 
 ## Features
 
