@@ -60,7 +60,7 @@ uptier/
 
 ### Prerequisites
 
-- Node.js 20+ (for Electron app)
+- Node.js 25 ([Current](https://nodejs.org/en/download/current)) (for Electron app)
 - pnpm 8+
 - Claude Desktop (for AI features)
 
@@ -73,8 +73,14 @@ uptier/
 git clone https://github.com/foxintheloop/uptier.git
 cd uptier
 
+# Install pnpm (if not already installed)
+npm install -g pnpm
+
 # Install dependencies
 pnpm install
+
+# Approve build scripts for canvas and sharp if needed
+pnpm approve-builds
 
 # Build shared package
 pnpm --filter @uptier/shared build
