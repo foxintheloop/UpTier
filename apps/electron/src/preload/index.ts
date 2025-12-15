@@ -13,6 +13,7 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   CreateGoalInput,
+  UpdateGoalInput,
   CreateTagInput,
   UpdateTagInput,
   GetTasksOptions,
@@ -157,15 +158,24 @@ const electronAPI = {
     addTag: (taskId: string, tagId: string): Promise<boolean> => ipcRenderer.invoke('tasks:addTag', taskId, tagId),
     removeTag: (taskId: string, tagId: string): Promise<boolean> => ipcRenderer.invoke('tasks:removeTag', taskId, tagId),
     getTags: (taskId: string): Promise<Tag[]> => ipcRenderer.invoke('tasks:getTags', taskId),
+    addGoal: (taskId: string, goalId: string, strength?: number): Promise<boolean> =>
+      ipcRenderer.invoke('tasks:addGoal', taskId, goalId, strength),
+    removeGoal: (taskId: string, goalId: string): Promise<boolean> =>
+      ipcRenderer.invoke('tasks:removeGoal', taskId, goalId),
   },
 
   // Goals
   goals: {
     getAll: (): Promise<Goal[]> => ipcRenderer.invoke('goals:getAll'),
+    getAllWithProgress: (): Promise<GoalWithProgress[]> => ipcRenderer.invoke('goals:getAllWithProgress'),
     create: (input: CreateGoalInput): Promise<Goal> => ipcRenderer.invoke('goals:create', input),
+    update: (id: string, input: UpdateGoalInput): Promise<Goal | null> =>
+      ipcRenderer.invoke('goals:update', id, input),
+    delete: (id: string): Promise<boolean> => ipcRenderer.invoke('goals:delete', id),
     linkTasks: (goalId: string, taskIds: string[], strength?: number): Promise<void> =>
       ipcRenderer.invoke('goals:linkTasks', goalId, taskIds, strength ?? 3),
     getProgress: (goalId: string): Promise<GoalWithProgress | null> => ipcRenderer.invoke('goals:getProgress', goalId),
+    getTasks: (goalId: string): Promise<TaskWithGoals[]> => ipcRenderer.invoke('goals:getTasks', goalId),
   },
 
   // Subtasks

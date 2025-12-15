@@ -4,9 +4,10 @@ import { Sidebar } from './components/Sidebar';
 import { TaskList } from './components/TaskList';
 import type { TaskListHandle } from './components/TaskList';
 import { TaskDetail } from './components/TaskDetail';
+import { GoalDetail } from './components/GoalDetail';
 import { Settings } from './components/Settings';
 import { Toaster } from './components/ui/toaster';
-import type { TaskWithGoals } from '@uptier/shared';
+import type { TaskWithGoals, GoalWithProgress } from '@uptier/shared';
 
 type ThemeMode = 'dark' | 'light' | 'system';
 
@@ -28,6 +29,7 @@ function applyTheme(theme: ThemeMode) {
 export default function App() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskWithGoals | null>(null);
+  const [selectedGoal, setSelectedGoal] = useState<GoalWithProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -217,6 +219,12 @@ export default function App() {
         onSelectList={(id) => {
           setSelectedListId(id);
           setSelectedTask(null);
+          setSelectedGoal(null);
+        }}
+        selectedGoalId={selectedGoal?.id ?? null}
+        onSelectGoal={(goal) => {
+          setSelectedGoal(goal);
+          setSelectedTask(null);
         }}
         onSettingsClick={() => setSettingsOpen(true)}
         collapsed={sidebarCollapsed}
@@ -228,13 +236,16 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
         {/* Task List */}
-        <div className={`flex-1 overflow-hidden ${selectedTask ? 'border-r border-border' : ''}`}>
+        <div className={`flex-1 overflow-hidden ${selectedTask || selectedGoal ? 'border-r border-border' : ''}`}>
           {selectedListId ? (
             <TaskList
               ref={taskListRef}
               listId={selectedListId}
               selectedTaskId={selectedTask?.id}
-              onSelectTask={setSelectedTask}
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                setSelectedGoal(null);
+              }}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -247,12 +258,27 @@ export default function App() {
         </div>
 
         {/* Task Detail Panel */}
-        {selectedTask && (
+        {selectedTask && !selectedGoal && (
           <div className="w-96 overflow-hidden">
             <TaskDetail
               task={selectedTask}
               onClose={() => setSelectedTask(null)}
               onUpdate={(updated) => setSelectedTask(updated)}
+            />
+          </div>
+        )}
+
+        {/* Goal Detail Panel */}
+        {selectedGoal && (
+          <div className="w-96 overflow-hidden">
+            <GoalDetail
+              goal={selectedGoal}
+              onClose={() => setSelectedGoal(null)}
+              onUpdate={(updated) => setSelectedGoal(updated)}
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                setSelectedGoal(null);
+              }}
             />
           </div>
         )}

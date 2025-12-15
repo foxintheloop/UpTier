@@ -40,6 +40,7 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   CreateGoalInput,
+  UpdateGoalInput,
   CreateTagInput,
   UpdateTagInput,
   GetTasksOptions,
@@ -480,6 +481,137 @@ function getGoalProgress(goalId: string): GoalWithProgress | null {
   };
 }
 
+function getAllGoalsWithProgress(): GoalWithProgress[] {
+  const db = getDb();
+  const goals = db.prepare("SELECT * FROM goals WHERE status = 'active' ORDER BY timeframe, name").all() as Goal[];
+
+  return goals.map((goal) => {
+    const stats = db.prepare(`
+      SELECT COUNT(t.id) as total, SUM(CASE WHEN t.completed = 1 THEN 1 ELSE 0 END) as completed
+      FROM task_goals tg JOIN tasks t ON t.id = tg.task_id WHERE tg.goal_id = ?
+    `).get(goal.id) as { total: number; completed: number };
+
+    return {
+      ...goal,
+      total_tasks: stats.total ?? 0,
+      completed_tasks: stats.completed ?? 0,
+      progress_percentage: stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0,
+    };
+  });
+}
+
+function updateGoal(id: string, input: UpdateGoalInput): Goal | null {
+  const db = getDb();
+  const updates: string[] = [];
+  const values: unknown[] = [];
+
+  if (input.name !== undefined) { updates.push('name = ?'); values.push(input.name); }
+  if (input.description !== undefined) { updates.push('description = ?'); values.push(input.description); }
+  if (input.timeframe !== undefined) { updates.push('timeframe = ?'); values.push(input.timeframe); }
+  if (input.target_date !== undefined) { updates.push('target_date = ?'); values.push(input.target_date); }
+  if (input.parent_goal_id !== undefined) { updates.push('parent_goal_id = ?'); values.push(input.parent_goal_id); }
+  if (input.status !== undefined) { updates.push('status = ?'); values.push(input.status); }
+
+  if (updates.length === 0) {
+    return db.prepare('SELECT * FROM goals WHERE id = ?').get(id) as Goal;
+  }
+
+  updates.push('updated_at = ?');
+  values.push(nowISO());
+  values.push(id);
+
+  ipcLog.debug('Updating goal', { id, fields: Object.keys(input) });
+  db.prepare(`UPDATE goals SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+  ipcLog.info('Goal updated', { id });
+  return db.prepare('SELECT * FROM goals WHERE id = ?').get(id) as Goal;
+}
+
+function deleteGoal(id: string): boolean {
+  const db = getDb();
+  ipcLog.debug('Deleting goal', { id });
+
+  const result = db.prepare('DELETE FROM goals WHERE id = ?').run(id);
+  const success = result.changes > 0;
+
+  if (success) {
+    ipcLog.info('Goal deleted', { id });
+  }
+  return success;
+}
+
+function addGoalToTask(taskId: string, goalId: string, alignmentStrength: number = 3): boolean {
+  const db = getDb();
+  ipcLog.debug('Adding goal to task', { taskId, goalId, alignmentStrength });
+
+  try {
+    db.prepare('INSERT OR REPLACE INTO task_goals (task_id, goal_id, alignment_strength) VALUES (?, ?, ?)').run(taskId, goalId, alignmentStrength);
+    ipcLog.info('Goal added to task', { taskId, goalId });
+    return true;
+  } catch (error) {
+    ipcLog.error('Failed to add goal to task', error as Error, { taskId, goalId });
+    return false;
+  }
+}
+
+function removeGoalFromTask(taskId: string, goalId: string): boolean {
+  const db = getDb();
+  ipcLog.debug('Removing goal from task', { taskId, goalId });
+
+  const result = db.prepare('DELETE FROM task_goals WHERE task_id = ? AND goal_id = ?').run(taskId, goalId);
+  const success = result.changes > 0;
+
+  if (success) {
+    ipcLog.info('Goal removed from task', { taskId, goalId });
+  }
+  return success;
+}
+
+function getTasksByGoal(goalId: string): TaskWithGoals[] {
+  const db = getDb();
+
+  const tasks = db.prepare(`
+    SELECT t.* FROM tasks t
+    JOIN task_goals tg ON t.id = tg.task_id
+    WHERE tg.goal_id = ?
+    ORDER BY t.completed ASC, t.position ASC
+  `).all(goalId) as Task[];
+
+  const goalQuery = db.prepare(`
+    SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
+    FROM task_goals tg
+    JOIN goals g ON g.id = tg.goal_id
+    WHERE tg.task_id = ?
+  `);
+
+  const tagQuery = db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM tags t
+    JOIN task_tags tt ON t.id = tt.tag_id
+    WHERE tt.task_id = ?
+  `);
+
+  return tasks.map((task) => {
+    const goals = goalQuery.all(task.id) as Array<{
+      goal_id: string;
+      goal_name: string;
+      alignment_strength: number;
+    }>;
+    const tags = tagQuery.all(task.id) as Tag[];
+
+    return {
+      ...task,
+      completed: Boolean(task.completed),
+      goals: goals.map((g) => ({
+        goal_id: g.goal_id,
+        goal_name: g.goal_name,
+        alignment_strength: g.alignment_strength,
+      })),
+      tags,
+    };
+  });
+}
+
 // ============================================================================
 // Subtasks
 // ============================================================================
@@ -663,9 +795,15 @@ export function registerIpcHandlers(): void {
 
   // Goals
   ipcMain.handle('goals:getAll', withLogging('goals:getAll', () => getGoals()));
+  ipcMain.handle('goals:getAllWithProgress', withLogging('goals:getAllWithProgress', () => getAllGoalsWithProgress()));
   ipcMain.handle('goals:create', withLogging('goals:create', (_, input: CreateGoalInput) => createGoal(input)));
+  ipcMain.handle('goals:update', withLogging('goals:update', (_, id: string, input: UpdateGoalInput) => updateGoal(id, input)));
+  ipcMain.handle('goals:delete', withLogging('goals:delete', (_, id: string) => deleteGoal(id)));
   ipcMain.handle('goals:linkTasks', withLogging('goals:linkTasks', (_, goalId: string, taskIds: string[], strength: number) => linkTasksToGoal(goalId, taskIds, strength)));
   ipcMain.handle('goals:getProgress', withLogging('goals:getProgress', (_, goalId: string) => getGoalProgress(goalId)));
+  ipcMain.handle('goals:getTasks', withLogging('goals:getTasks', (_, goalId: string) => getTasksByGoal(goalId)));
+  ipcMain.handle('tasks:addGoal', withLogging('tasks:addGoal', (_, taskId: string, goalId: string, strength?: number) => addGoalToTask(taskId, goalId, strength)));
+  ipcMain.handle('tasks:removeGoal', withLogging('tasks:removeGoal', (_, taskId: string, goalId: string) => removeGoalFromTask(taskId, goalId)));
 
   // Subtasks
   ipcMain.handle('subtasks:getByTask', withLogging('subtasks:getByTask', (_, taskId: string) => getSubtasks(taskId)));

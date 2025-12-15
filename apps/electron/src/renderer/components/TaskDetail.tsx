@@ -7,6 +7,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { TagPicker } from './TagPicker';
 import { TagBadge } from './TagBadge';
+import { GoalPicker } from './GoalPicker';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
 import { PRIORITY_SCALES, PRIORITY_TIERS } from '@uptier/shared';
@@ -82,6 +83,12 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
   const handleTagsChange = () => {
     // Invalidate tasks query to refresh task data with updated tags
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  };
+
+  const handleGoalsChange = () => {
+    // Invalidate tasks and goals queries to refresh data
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['goals'] });
   };
 
   const handleGetDueDateSuggestion = async () => {
@@ -252,27 +259,32 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
           )}
 
           {/* Goals */}
-          {task.goals.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Target className="h-4 w-4" />
-                Linked Goals
-              </div>
-              <div className="space-y-1">
-                {task.goals.map((goal) => (
-                  <div
-                    key={goal.goal_id}
-                    className="flex items-center justify-between text-sm p-2 rounded-md bg-secondary/30"
-                  >
-                    <span>{goal.goal_name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      Strength: {goal.alignment_strength}/5
-                    </span>
-                  </div>
-                ))}
-              </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Target className="h-4 w-4" />
+              Goals
             </div>
-          )}
+            <div className="flex flex-wrap items-center gap-2">
+              {task.goals.length > 0 && (
+                <>
+                  {task.goals.map((goal) => (
+                    <div
+                      key={goal.goal_id}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/10 rounded-full"
+                    >
+                      <Target className="h-3 w-3" />
+                      <span>{goal.goal_name}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+              <GoalPicker
+                taskId={task.id}
+                selectedGoals={task.goals}
+                onGoalsChange={handleGoalsChange}
+              />
+            </div>
+          </div>
 
           {/* Tags */}
           <div className="space-y-2">

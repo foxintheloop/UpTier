@@ -24,7 +24,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { cn } from '@/lib/utils';
-import type { ListWithCount } from '@uptier/shared';
+import type { ListWithCount, GoalWithProgress, Timeframe } from '@uptier/shared';
 
 interface DatabaseProfile {
   id: string;
@@ -38,6 +38,8 @@ interface DatabaseProfile {
 interface SidebarProps {
   selectedListId: string | null;
   onSelectList: (id: string) => void;
+  selectedGoalId: string | null;
+  onSelectGoal: (goal: GoalWithProgress | null) => void;
   onSettingsClick: () => void;
   onDatabaseSwitch?: () => void;
   collapsed?: boolean;
@@ -57,11 +59,19 @@ const SMART_LISTS = [
   { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 
-export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatabaseSwitch, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
+const TIMEFRAME_COLORS: Record<Timeframe, string> = {
+  daily: 'text-emerald-400',
+  weekly: 'text-blue-400',
+  monthly: 'text-purple-400',
+  quarterly: 'text-amber-400',
+  yearly: 'text-red-400',
+};
+
+export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelectGoal, onSettingsClick, onDatabaseSwitch, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listsExpanded, setListsExpanded] = useState(true);
-  const [goalsExpanded, setGoalsExpanded] = useState(false);
+  const [goalsExpanded, setGoalsExpanded] = useState(true);
   const [dbDropdownOpen, setDbDropdownOpen] = useState(false);
   const [showNewDb, setShowNewDb] = useState(false);
   const [newDbName, setNewDbName] = useState('');
@@ -69,6 +79,9 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
   const [editingListName, setEditingListName] = useState('');
   const [listMenuOpen, setListMenuOpen] = useState<string | null>(null);
   const [isResizing, setIsResizing] = useState(false);
+  const [showNewGoal, setShowNewGoal] = useState(false);
+  const [newGoalName, setNewGoalName] = useState('');
+  const [newGoalTimeframe, setNewGoalTimeframe] = useState<Timeframe>('weekly');
 
   const queryClient = useQueryClient();
 
@@ -87,12 +100,28 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
     queryFn: () => window.electronAPI.database.getActiveProfile(),
   });
 
+  const { data: goals = [] } = useQuery<GoalWithProgress[]>({
+    queryKey: ['goals'],
+    queryFn: () => window.electronAPI.goals.getAllWithProgress(),
+  });
+
   const createListMutation = useMutation({
     mutationFn: (name: string) => window.electronAPI.lists.create({ name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
       setNewListName('');
       setShowNewList(false);
+    },
+  });
+
+  const createGoalMutation = useMutation({
+    mutationFn: ({ name, timeframe }: { name: string; timeframe: Timeframe }) =>
+      window.electronAPI.goals.create({ name, timeframe }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      setNewGoalName('');
+      setNewGoalTimeframe('weekly');
+      setShowNewGoal(false);
     },
   });
 
@@ -151,6 +180,12 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
   const handleCreateList = () => {
     if (newListName.trim()) {
       createListMutation.mutate(newListName.trim());
+    }
+  };
+
+  const handleCreateGoal = () => {
+    if (newGoalName.trim()) {
+      createGoalMutation.mutate({ name: newGoalName.trim(), timeframe: newGoalTimeframe });
     }
   };
 
@@ -558,35 +593,134 @@ export function Sidebar({ selectedListId, onSelectList, onSettingsClick, onDatab
           <div className="border-t border-border my-2" />
 
           {/* Goals */}
-          <div>
-            {collapsed ? (
+          <div className="mb-4">
+            {!collapsed && (
               <button
-                className="w-full flex items-center justify-center p-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                title="Goals (Coming soon)"
+                onClick={() => setGoalsExpanded(!goalsExpanded)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
               >
-                <Target className="h-4 w-4" />
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => setGoalsExpanded(!goalsExpanded)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-                >
-                  {goalsExpanded ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                  <Target className="h-4 w-4" />
-                  <span>Goals</span>
-                </button>
-
-                {goalsExpanded && (
-                  <div className="ml-2 px-3 py-2 text-sm text-muted-foreground">
-                    <p>Coming soon...</p>
-                  </div>
+                {goalsExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
                 )}
-              </>
+                <Target className="h-4 w-4" />
+                <span>Goals</span>
+                {goals.length > 0 && (
+                  <span className="ml-auto text-xs">{goals.length}</span>
+                )}
+              </button>
+            )}
+
+            {(collapsed || goalsExpanded) && (
+              <div className={cn(!collapsed && "ml-2")}>
+                {goals.map((goal) => (
+                  <button
+                    key={goal.id}
+                    onClick={() => {
+                      onSelectGoal(goal);
+                    }}
+                    className={cn(
+                      'w-full flex items-center rounded-md text-sm transition-colors',
+                      collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
+                      selectedGoalId === goal.id
+                        ? 'bg-accent text-accent-foreground'
+                        : 'hover:bg-accent/50 text-muted-foreground'
+                    )}
+                    title={collapsed ? goal.name : undefined}
+                  >
+                    <Target
+                      className={cn('h-4 w-4 flex-shrink-0', TIMEFRAME_COLORS[goal.timeframe])}
+                    />
+                    {!collapsed && (
+                      <>
+                        <div className="flex-1 text-left min-w-0">
+                          <div className="truncate">{goal.name}</div>
+                          {goal.total_tasks > 0 && (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
+                                <div
+                                  className={cn(
+                                    'h-full rounded-full',
+                                    goal.progress_percentage === 100 ? 'bg-green-500' : 'bg-primary'
+                                  )}
+                                  style={{ width: `${goal.progress_percentage}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground flex-shrink-0">
+                                {goal.completed_tasks}/{goal.total_tasks}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </button>
+                ))}
+
+                {/* New Goal Input */}
+                {!collapsed && (
+                  showNewGoal ? (
+                    <div className="px-3 py-2 space-y-2">
+                      <Input
+                        autoFocus
+                        placeholder="Goal name"
+                        value={newGoalName}
+                        onChange={(e) => setNewGoalName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleCreateGoal();
+                          if (e.key === 'Escape') {
+                            setShowNewGoal(false);
+                            setNewGoalName('');
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!newGoalName.trim()) {
+                            setShowNewGoal(false);
+                          }
+                        }}
+                        className="h-8 text-sm"
+                      />
+                      <div className="flex flex-wrap gap-1">
+                        {(['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as Timeframe[]).map((tf) => (
+                          <button
+                            key={tf}
+                            onClick={() => setNewGoalTimeframe(tf)}
+                            className={cn(
+                              'px-2 py-0.5 text-xs rounded transition-colors',
+                              newGoalTimeframe === tf
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary hover:bg-secondary/80'
+                            )}
+                          >
+                            {tf}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowNewGoal(true)}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>New Goal</span>
+                    </button>
+                  )
+                )}
+                {collapsed && (
+                  <button
+                    onClick={() => {
+                      if (onToggleCollapse) onToggleCollapse();
+                      setShowNewGoal(true);
+                    }}
+                    className="w-full flex items-center justify-center p-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    title="New Goal"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
