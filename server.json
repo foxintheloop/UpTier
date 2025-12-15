@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.foxintheloop/UpTier",
+  "description": "MCP-powered To-Do application with intelligent task prioritization",
+  "repository": {
+    "url": "https://github.com/foxintheloop/UpTier",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@foxintheloop/uptier-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
