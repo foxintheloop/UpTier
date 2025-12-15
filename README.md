@@ -7,6 +7,10 @@
 
 UpTier is a desktop to-do application that combines a clean Microsoft To Do-style interface with the power of Claude AI for intelligent task prioritization. Through the Model Context Protocol (MCP), Claude can analyze your tasks and help you focus on what matters most.
 
+## Demo
+
+https://github.com/user-attachments/assets/0d89b6df-8b85-49b0-a77d-10cd55d3613f
+
 ## Features
 
 ### Task Management
