@@ -3,7 +3,8 @@
 > MCP-powered task management with intelligent prioritization via Claude Desktop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)]()
+[![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)]()
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-green)](https://registry.modelcontextprotocol.io/?q=uptier)
 
 UpTier is a desktop to-do application that combines a clean Microsoft To Do-style interface with the power of Claude AI for intelligent task prioritization. Through the Model Context Protocol (MCP), Claude can analyze your tasks and help you focus on what matters most.
 
@@ -294,6 +295,10 @@ Contributions are welcome! Here's how to get started:
 5. Commit your changes (`git commit -m 'Add amazing feature'`)
 6. Push to the branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
+
+### Help Wanted: macOS & Linux Testing
+
+UpTier is currently only tested on Windows. If you're on macOS or Linux, we'd love your help testing and reporting any platform-specific issues!
 
 ## License
 
