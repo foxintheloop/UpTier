@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getDb, generateId, nowISO } from '../database.js';
 import { notifyChange } from '../changelog.js';
+import { getOrCreateDefaultList } from './lists.js';
 import type {
   Task,
   TaskWithGoals,
@@ -16,7 +17,7 @@ import type {
 // ============================================================================
 
 export const createTaskSchema = z.object({
-  list_id: z.string().describe('ID of the list to add the task to'),
+  list_id: z.string().optional().describe('ID of the list to add the task to. If not provided, uses the default Inbox list.'),
   title: z.string().min(1).describe('Task title'),
   notes: z.string().optional().describe('Additional notes'),
   due_date: z.string().optional().describe('Due date (YYYY-MM-DD)'),
@@ -81,7 +82,7 @@ export const moveTaskSchema = z.object({
 });
 
 export const bulkCreateTasksSchema = z.object({
-  list_id: z.string().describe('List ID to add tasks to'),
+  list_id: z.string().optional().describe('List ID to add tasks to. If not provided, uses the default Inbox list.'),
   tasks: z.array(z.object({
     title: z.string().min(1),
     notes: z.string().optional(),
@@ -408,14 +409,21 @@ function getTodayDate(): string {
 
 export const taskTools = {
   create_task: {
-    description: `Create a new task in a list. For smart lists:
-- "My Day": Set add_to_my_day=true (sets due_date to today)
-- "Important": Set mark_important=true (sets priority_tier to 1)
-The task still needs a list_id for storage in a regular list.`,
+    description: `Create a new task. If list_id is not provided, the task will be added to the default Inbox list.
+For smart lists like "My Day" or "Important":
+- Set add_to_my_day=true to add to My Day (sets due_date to today)
+- Set mark_important=true to mark as important (sets priority_tier to 1)
+You do NOT need to provide a list_id - tasks will automatically go to the Inbox.`,
     inputSchema: createTaskSchema,
     handler: (input: z.infer<typeof createTaskSchema>) => {
       // Apply smart list transformations
       const taskInput = { ...input } as CreateTaskInput & { add_to_my_day?: boolean; mark_important?: boolean };
+
+      // If no list_id provided, use the default Inbox list
+      if (!taskInput.list_id) {
+        const defaultList = getOrCreateDefaultList();
+        taskInput.list_id = defaultList.id;
+      }
 
       // If add_to_my_day is true, set due_date to today
       if (taskInput.add_to_my_day && !taskInput.due_date) {
@@ -513,12 +521,20 @@ The task still needs a list_id for storage in a regular list.`,
   },
 
   bulk_create_tasks: {
-    description: `Create multiple tasks at once in a list. For smart lists:
-- "My Day": Set add_to_my_day=true (sets due_date to today for all tasks)
-- "Important": Set mark_important=true (sets priority_tier to 1 for all tasks)
-The tasks still need a list_id for storage in a regular list.`,
+    description: `Create multiple tasks at once. If list_id is not provided, tasks will be added to the default Inbox list.
+For smart lists like "My Day" or "Important":
+- Set add_to_my_day=true to add all tasks to My Day (sets due_date to today)
+- Set mark_important=true to mark all tasks as important (sets priority_tier to 1)
+You do NOT need to provide a list_id - tasks will automatically go to the Inbox.`,
     inputSchema: bulkCreateTasksSchema,
     handler: (input: z.infer<typeof bulkCreateTasksSchema>) => {
+      // If no list_id provided, use the default Inbox list
+      let listId = input.list_id;
+      if (!listId) {
+        const defaultList = getOrCreateDefaultList();
+        listId = defaultList.id;
+      }
+
       // Apply smart list transformations to each task
       const transformedTasks = input.tasks.map(task => {
         const transformed = { ...task };
@@ -536,7 +552,7 @@ The tasks still need a list_id for storage in a regular list.`,
         return transformed;
       });
 
-      const tasks = bulkCreateTasks(input.list_id, transformedTasks);
+      const tasks = bulkCreateTasks(listId, transformedTasks);
       notifyChange('task', 'bulk');
       return { success: true, tasks, count: tasks.length };
     },

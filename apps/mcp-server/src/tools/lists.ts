@@ -163,6 +163,51 @@ export function reorderLists(listIds: string[]): void {
   transaction();
 }
 
+/**
+ * Get or create a default "Inbox" list for tasks that don't specify a list_id.
+ * This is used when adding tasks to smart lists (My Day, Important) without specifying a storage list.
+ *
+ * Priority:
+ * 1. Return existing "Inbox" list if found
+ * 2. Return the first regular (non-smart) list if exists
+ * 3. Create a new "Inbox" list
+ */
+export function getOrCreateDefaultList(): List {
+  const db = getDb();
+
+  // First, try to find an existing "Inbox" list
+  const inboxList = db.prepare(
+    'SELECT * FROM lists WHERE name = ? AND is_smart_list = 0'
+  ).get('Inbox') as List | undefined;
+
+  if (inboxList) {
+    return {
+      ...inboxList,
+      is_smart_list: Boolean(inboxList.is_smart_list),
+    };
+  }
+
+  // Second, try to get the first regular list
+  const firstList = db.prepare(
+    'SELECT * FROM lists WHERE is_smart_list = 0 ORDER BY position ASC LIMIT 1'
+  ).get() as List | undefined;
+
+  if (firstList) {
+    return {
+      ...firstList,
+      is_smart_list: Boolean(firstList.is_smart_list),
+    };
+  }
+
+  // No regular lists exist, create an Inbox list
+  return createList({
+    name: 'Inbox',
+    description: 'Default list for tasks',
+    icon: 'inbox',
+    color: '#6366f1', // Indigo color
+  });
+}
+
 // ============================================================================
 // Tool Definitions for MCP
 // ============================================================================
