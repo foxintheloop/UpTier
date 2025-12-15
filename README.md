@@ -60,11 +60,9 @@ uptier/
 
 ### Prerequisites
 
-- Node.js 25 ([Current](https://nodejs.org/en/download/current)) (for Electron app)
+- [Node.js](https://nodejs.org/) 20+ (LTS recommended)
 - pnpm 8+
 - Claude Desktop (for AI features)
-
-> **Note:** Claude Desktop uses Node.js 23 internally. If you encounter native module errors with the MCP server, you may need to install Node.js 23 via [fnm](https://github.com/Schniz/fnm) and rebuild the MCP server's `better-sqlite3` for that version.
 
 ### Installation
 
@@ -79,16 +77,14 @@ npm install -g pnpm
 # Install dependencies
 pnpm install
 
-# Approve build scripts for canvas and sharp if needed
+# Approve build scripts for native modules (canvas, sharp, electron)
 pnpm approve-builds
 
-# Rebuild to trigger the postinstall scripts
+# Rebuild native modules
 pnpm rebuild
 
-# Build shared package
+# Build packages
 pnpm --filter @uptier/shared build
-
-# Build MCP server
 pnpm --filter @uptier/mcp-server build
 ```
 
@@ -102,9 +98,26 @@ pnpm dev:electron
 pnpm --filter @uptier/electron build
 ```
 
-### Configuring Claude Desktop
+### Claude Desktop Integration
 
-Add UpTier to your Claude Desktop MCP configuration:
+Deploy the MCP server for Claude Desktop:
+
+```bash
+# Deploy MCP server to standalone directory
+pnpm --filter @uptier/mcp-server deploy
+```
+
+This deploys the MCP server to `~/.uptier/mcp-server/` with its own `node_modules`, automatically compiled for your current Node.js version. The Claude Desktop config is updated automatically.
+
+> **Why standalone?** The Electron app uses Node.js 22 (bundled), while Claude Desktop may use a different Node.js version. The standalone deployment compiles native modules (like `better-sqlite3`) for the correct version, preventing conflicts.
+
+After deployment:
+1. Restart Claude Desktop
+2. The UpTier tools will be available in Claude
+
+#### Manual Configuration (Alternative)
+
+If the automatic deployment doesn't work, add UpTier manually to your Claude Desktop config:
 
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -115,16 +128,11 @@ Add UpTier to your Claude Desktop MCP configuration:
   "mcpServers": {
     "uptier": {
       "command": "node",
-      "args": ["/path/to/uptier/apps/mcp-server/dist/index.js"],
-      "env": {
-        "NODE_ENV": "production"
-      }
+      "args": ["/path/to/.uptier/mcp-server/index.js"]
     }
   }
 }
 ```
-
-> Replace `/path/to/uptier` with your actual installation path.
 
 ## MCP Tools
 
@@ -251,20 +259,15 @@ node node_modules/electron/install.js
 
 ### Native module errors with MCP server
 
-If Claude Desktop shows errors about `better-sqlite3`, you may need to rebuild it for Node.js 23 (which Claude Desktop uses internally):
+If Claude Desktop shows errors about `better-sqlite3` or `NODE_MODULE_VERSION` mismatches, use the standalone deployment:
 
 ```bash
-# Install fnm (Fast Node Manager)
-# See: https://github.com/Schniz/fnm
-
-# Switch to Node.js 23
-fnm install 23
-fnm use 23
-
-# Rebuild the MCP server's native modules
-cd apps/mcp-server
-pnpm rebuild
+pnpm --filter @uptier/mcp-server deploy
 ```
+
+This creates a separate MCP server installation at `~/.uptier/mcp-server/` with native modules compiled for your current Node.js version, avoiding conflicts with the Electron app.
+
+If you still have issues, ensure you're running the deploy command with the same Node.js version that Claude Desktop uses (typically Node.js 23).
 
 ### Build script warnings
 

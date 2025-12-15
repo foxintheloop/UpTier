@@ -12,12 +12,13 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "node ../../scripts/deploy-mcp.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@uptier/shared": "workspace:*",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^11.10.0",
     "pino": "^10.1.0",
     "zod": "^3.23.0"
   },

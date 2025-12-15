@@ -35,7 +35,10 @@ export function ensureDbDirectory(): void {
  */
 function getSchema(): string {
   // Try multiple paths to find schema.sql
+  // Order: standalone deployment, monorepo node_modules, monorepo packages
   const possiblePaths = [
+    join(__dirname, 'node_modules/@uptier/shared/src/schema.sql'), // Standalone deployment (npm file: dep)
+    join(__dirname, '../shared/src/schema.sql'), // Standalone deployment (direct copy)
     join(__dirname, '../../node_modules/@uptier/shared/src/schema.sql'),
     join(__dirname, '../../../packages/shared/src/schema.sql'),
     join(__dirname, '../../../../packages/shared/src/schema.sql'),
