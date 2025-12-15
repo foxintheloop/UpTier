@@ -5,6 +5,10 @@ node_modules/
 # Build outputs
 dist/
 build/
+!apps/electron/build/
+apps/electron/build/*
+!apps/electron/build/icon.ico
+!apps/electron/build/icon.png
 out/
 *.tsbuildinfo
 
