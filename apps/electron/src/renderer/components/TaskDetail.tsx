@@ -13,6 +13,9 @@ import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
 import { PRIORITY_SCALES, PRIORITY_TIERS } from '@uptier/shared';
 import { format, parseISO } from 'date-fns';
 
+// Helper to parse UTC timestamps from database (stored without 'Z' indicator)
+const parseUTCTimestamp = (timestamp: string) => parseISO(timestamp.replace(' ', 'T') + 'Z');
+
 interface TaskDetailProps {
   task: TaskWithGoals;
   onClose: () => void;
@@ -467,10 +470,10 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
 
           {/* Metadata */}
           <div className="text-xs text-muted-foreground space-y-1 pt-4 border-t border-border">
-            <p>Created: {format(parseISO(task.created_at), 'PPp')}</p>
-            <p>Updated: {format(parseISO(task.updated_at), 'PPp')}</p>
+            <p>Created: {format(parseUTCTimestamp(task.created_at), 'PPp')}</p>
+            <p>Updated: {format(parseUTCTimestamp(task.updated_at), 'PPp')}</p>
             {task.prioritized_at && (
-              <p>Last prioritized: {format(parseISO(task.prioritized_at), 'PPp')}</p>
+              <p>Last prioritized: {format(parseUTCTimestamp(task.prioritized_at), 'PPp')}</p>
             )}
           </div>
         </div>

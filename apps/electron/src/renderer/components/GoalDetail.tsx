@@ -9,6 +9,9 @@ import { cn } from '@/lib/utils';
 import type { GoalWithProgress, TaskWithGoals, UpdateGoalInput, Timeframe, GoalStatus } from '@uptier/shared';
 import { format, parseISO } from 'date-fns';
 
+// Helper to parse UTC timestamps from database (stored without 'Z' indicator)
+const parseUTCTimestamp = (timestamp: string) => parseISO(timestamp.replace(' ', 'T') + 'Z');
+
 const TIMEFRAME_OPTIONS: { value: Timeframe; label: string; color: string }[] = [
   { value: 'daily', label: 'Daily', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
   { value: 'weekly', label: 'Weekly', color: 'text-blue-400 bg-blue-500/10 border-blue-500/30' },
@@ -263,8 +266,8 @@ export function GoalDetail({ goal, onClose, onUpdate, onSelectTask }: GoalDetail
 
           {/* Metadata */}
           <div className="text-xs text-muted-foreground space-y-1 pt-4 border-t border-border">
-            <p>Created: {format(parseISO(goal.created_at), 'PPp')}</p>
-            <p>Updated: {format(parseISO(goal.updated_at), 'PPp')}</p>
+            <p>Created: {format(parseUTCTimestamp(goal.created_at), 'PPp')}</p>
+            <p>Updated: {format(parseUTCTimestamp(goal.updated_at), 'PPp')}</p>
           </div>
         </div>
       </ScrollArea>
