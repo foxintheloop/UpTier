@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check } from 'lucide-react';
+import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -70,6 +70,22 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
       }
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => window.electronAPI.tasks.delete(task.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      onClose();
+    },
+  });
+
+  const handleDelete = () => {
+    if (window.confirm(`Delete "${task.title}"? This action cannot be undone.`)) {
+      deleteMutation.mutate();
+    }
+  };
 
   const handleTitleBlur = () => {
     if (title !== task.title && title.trim()) {
@@ -475,6 +491,19 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
             {task.prioritized_at && (
               <p>Last prioritized: {format(parseUTCTimestamp(task.prioritized_at), 'PPp')}</p>
             )}
+          </div>
+
+          {/* Delete Button */}
+          <div className="pt-4 mt-4 border-t border-border">
+            <Button
+              variant="ghost"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="w-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Task'}
+            </Button>
           </div>
         </div>
       </ScrollArea>
