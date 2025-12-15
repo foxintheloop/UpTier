@@ -8,11 +8,11 @@
     "uptier-mcp": "./dist/index.js"
   },
   "scripts": {
-    "build": "npx tsc",
-    "dev": "npx tsx watch src/index.ts",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "clean": "npx rimraf dist",
-    "typecheck": "npx tsc --noEmit"
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

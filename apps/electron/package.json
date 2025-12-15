@@ -7,9 +7,9 @@
     "dev": "node scripts/dev.js",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "npm run build && npx electron-builder",
-    "clean": "npx rimraf out dist release",
-    "typecheck": "npx tsc --noEmit",
+    "package": "pnpm run build && electron-builder",
+    "clean": "rimraf out dist release",
+    "typecheck": "tsc --noEmit",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },

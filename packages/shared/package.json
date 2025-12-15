@@ -18,9 +18,9 @@
     "src/schema.sql"
   ],
   "scripts": {
-    "build": "npx tsc",
-    "clean": "npx rimraf dist",
-    "typecheck": "npx tsc --noEmit"
+    "build": "tsc",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "rimraf": "^5.0.0",
