@@ -4,7 +4,7 @@ import { Checkbox } from './ui/checkbox';
 import { PriorityBadge } from './PriorityBadge';
 import { TagBadge } from './TagBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Clock, Target, Zap, Gem, GripVertical } from 'lucide-react';
+import { Clock, Target, Zap, Gem, GripVertical, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals } from '@uptier/shared';
 import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
@@ -14,10 +14,11 @@ interface TaskItemProps {
   isSelected: boolean;
   onSelect: () => void;
   onComplete: (completed: boolean) => void;
+  onStartFocus?: (task: TaskWithGoals) => void;
   isDraggable?: boolean;
 }
 
-export function TaskItem({ task, isSelected, onSelect, onComplete, isDraggable = true }: TaskItemProps) {
+export function TaskItem({ task, isSelected, onSelect, onComplete, onStartFocus, isDraggable = true }: TaskItemProps) {
   const {
     attributes,
     listeners,
@@ -74,6 +75,24 @@ export function TaskItem({ task, isSelected, onSelect, onComplete, isDraggable =
           onClick={(e) => e.stopPropagation()}
           className="mt-1"
         />
+
+        {/* Focus Button */}
+        {!task.completed && onStartFocus && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartFocus(task);
+                }}
+                className="mt-0.5 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20 text-muted-foreground hover:text-primary"
+              >
+                <Play className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Start Focus Session</TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Content */}
         <div className="flex-1 min-w-0">

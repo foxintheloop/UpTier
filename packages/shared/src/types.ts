@@ -302,3 +302,30 @@ export interface SmartListFilter {
     is_overdue?: boolean;
   };
 }
+
+// ============================================================================
+// Focus Session Types
+// ============================================================================
+
+export interface FocusSession {
+  id: string;
+  task_id: string;
+  duration_minutes: number;
+  started_at: string;
+  ended_at: string | null;
+  completed: boolean;
+  created_at: string;
+}
+
+export interface StartFocusSessionInput {
+  task_id: string;
+  duration_minutes: number;
+}
+
+export interface EndFocusSessionInput {
+  completed: boolean;
+}
+
+export interface FocusSessionWithTask extends FocusSession {
+  task_title: string;
+}

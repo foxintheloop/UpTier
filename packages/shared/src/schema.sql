@@ -135,6 +135,22 @@ CREATE INDEX IF NOT EXISTS idx_goals_parent ON goals(parent_goal_id);
 CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
 
 -- ============================================================================
+-- Focus Sessions Table
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS focus_sessions (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    duration_minutes INTEGER NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    completed INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_focus_sessions_task ON focus_sessions(task_id);
+CREATE INDEX IF NOT EXISTS idx_focus_sessions_date ON focus_sessions(started_at);
+
+-- ============================================================================
 -- Triggers for updated_at
 -- ============================================================================
 CREATE TRIGGER IF NOT EXISTS update_lists_timestamp

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2 } from 'lucide-react';
+import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -8,8 +8,16 @@ import { Badge } from './ui/badge';
 import { TagPicker } from './TagPicker';
 import { TagBadge } from './TagBadge';
 import { GoalPicker } from './GoalPicker';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
+
+const FOCUS_DURATIONS = [
+  { value: 30, label: '30 min' },
+  { value: 45, label: '45 min' },
+  { value: 60, label: '60 min' },
+  { value: 90, label: '90 min' },
+];
 import { PRIORITY_SCALES, PRIORITY_TIERS } from '@uptier/shared';
 import { format, parseISO } from 'date-fns';
 
@@ -20,6 +28,7 @@ interface TaskDetailProps {
   task: TaskWithGoals;
   onClose: () => void;
   onUpdate: (task: TaskWithGoals) => void;
+  onStartFocus?: (task: TaskWithGoals, durationMinutes: number) => void;
 }
 
 interface DueDateSuggestion {
@@ -40,10 +49,11 @@ interface BreakdownSuggestion {
   reasoning: string;
 }
 
-export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
+export function TaskDetail({ task, onClose, onUpdate, onStartFocus }: TaskDetailProps) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes || '');
   const [showDueDateSuggestion, setShowDueDateSuggestion] = useState(false);
+  const [customDuration, setCustomDuration] = useState('');
   const [showBreakdownSuggestion, setShowBreakdownSuggestion] = useState(false);
   const [dueDateSuggestion, setDueDateSuggestion] = useState<DueDateSuggestion | null>(null);
   const [breakdownSuggestion, setBreakdownSuggestion] = useState<BreakdownSuggestion | null>(null);
@@ -161,9 +171,66 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <h3 className="font-medium">Task Details</h3>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Focus Button with Duration Picker */}
+          {!task.completed && onStartFocus && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Play className="h-4 w-4" />
+                  Focus
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" align="end">
+                <div className="space-y-1">
+                  {FOCUS_DURATIONS.map((duration) => (
+                    <Button
+                      key={duration.value}
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => onStartFocus(task, duration.value)}
+                    >
+                      {duration.label}
+                    </Button>
+                  ))}
+                  <div className="pt-1 border-t border-border mt-1">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Custom"
+                        value={customDuration}
+                        onChange={(e) => setCustomDuration(e.target.value)}
+                        className="h-8 text-sm"
+                        min={1}
+                        max={480}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2"
+                        disabled={!customDuration || parseInt(customDuration) < 1}
+                        onClick={() => {
+                          const duration = parseInt(customDuration);
+                          if (duration >= 1) {
+                            onStartFocus(task, duration);
+                            setCustomDuration('');
+                          }
+                        }}
+                      >
+                        Go
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
