@@ -37,6 +37,12 @@ https://github.com/user-attachments/assets/71264f79-3f54-4b45-9d7e-dcef26f54f94
 - **Easy Switching** - Switch between database profiles from the sidebar
 - **Isolated Data** - Each profile maintains its own lists, tasks, and settings
 
+### Focus Timer
+- **Distraction-Free Mode** - Full-screen timer overlay to help you stay focused
+- **Flexible Durations** - Preset options (30, 45, 60, 90 min) or custom duration
+- **Task Context** - See task title and notes while working
+- **Keyboard Controls** - Space to pause/resume, Esc to end session
+
 ### User Experience
 - **Dark Mode** - Modern dark theme interface
 - **Keyboard Shortcuts** - Quick actions with Ctrl+F (search), Ctrl+N (new task)
@@ -236,6 +242,13 @@ Application logs are stored at:
 | `Delete` | Delete selected task |
 | `Escape` | Close detail panel |
 
+### Focus Timer Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Space` | Pause/Resume timer |
+| `Escape` | End focus session |
+
 ## Roadmap
 
 - [x] Smart lists (My Day, Important, Planned, Completed)
@@ -246,6 +259,7 @@ Application logs are stored at:
 - [x] Multiple database profiles
 - [x] Data export
 - [x] List rename/delete
+- [x] Focus timer
 - [ ] Recurring tasks
 - [ ] Custom smart list filters
 - [ ] Calendar integration
