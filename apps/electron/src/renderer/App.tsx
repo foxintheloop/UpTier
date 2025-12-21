@@ -24,6 +24,9 @@ type ThemeMode = 'dark' | 'light' | 'system';
 const SIDEBAR_WIDTH_KEY = 'uptier-sidebar-width';
 const DEFAULT_SIDEBAR_WIDTH = 256;
 
+const DETAIL_WIDTH_KEY = 'uptier-detail-width';
+const DEFAULT_DETAIL_WIDTH = 384;
+
 // Apply theme to document
 function applyTheme(theme: ThemeMode) {
   const effectiveTheme = theme === 'system'
@@ -46,6 +49,10 @@ export default function App() {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_SIDEBAR_WIDTH;
   });
+  const [detailPanelWidth, setDetailPanelWidth] = useState(() => {
+    const saved = localStorage.getItem(DETAIL_WIDTH_KEY);
+    return saved ? parseInt(saved, 10) : DEFAULT_DETAIL_WIDTH;
+  });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [activeFocusSession, setActiveFocusSession] = useState<ActiveFocusSession | null>(null);
   const queryClient = useQueryClient();
@@ -55,6 +62,12 @@ export default function App() {
   const handleSidebarWidthChange = useCallback((width: number) => {
     setSidebarWidth(width);
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width));
+  }, []);
+
+  // Save detail panel width to localStorage when it changes
+  const handleDetailWidthChange = useCallback((width: number) => {
+    setDetailPanelWidth(width);
+    localStorage.setItem(DETAIL_WIDTH_KEY, String(width));
   }, []);
 
   // Track window width for responsive behavior
@@ -299,14 +312,14 @@ export default function App() {
 
         {/* Task Detail Panel */}
         {selectedTask && !selectedGoal && (
-          <div className="w-96 overflow-hidden">
-            <TaskDetail
-              task={selectedTask}
-              onClose={() => setSelectedTask(null)}
-              onUpdate={(updated) => setSelectedTask(updated)}
-              onStartFocus={handleStartFocus}
-            />
-          </div>
+          <TaskDetail
+            task={selectedTask}
+            onClose={() => setSelectedTask(null)}
+            onUpdate={(updated) => setSelectedTask(updated)}
+            onStartFocus={handleStartFocus}
+            width={detailPanelWidth}
+            onWidthChange={handleDetailWidthChange}
+          />
         )}
 
         {/* Goal Detail Panel */}

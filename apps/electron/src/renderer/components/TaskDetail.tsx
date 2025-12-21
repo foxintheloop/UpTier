@@ -29,7 +29,12 @@ interface TaskDetailProps {
   onClose: () => void;
   onUpdate: (task: TaskWithGoals) => void;
   onStartFocus?: (task: TaskWithGoals, durationMinutes: number) => void;
+  width?: number;
+  onWidthChange?: (width: number) => void;
 }
+
+const MIN_DETAIL_WIDTH = 300;
+const MAX_DETAIL_WIDTH = 600;
 
 interface DueDateSuggestion {
   suggestedDate: string;
@@ -49,12 +54,13 @@ interface BreakdownSuggestion {
   reasoning: string;
 }
 
-export function TaskDetail({ task, onClose, onUpdate, onStartFocus }: TaskDetailProps) {
+export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWidthChange }: TaskDetailProps) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes || '');
   const [showDueDateSuggestion, setShowDueDateSuggestion] = useState(false);
   const [customDuration, setCustomDuration] = useState('');
   const [focusPopoverOpen, setFocusPopoverOpen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [showBreakdownSuggestion, setShowBreakdownSuggestion] = useState(false);
   const [dueDateSuggestion, setDueDateSuggestion] = useState<DueDateSuggestion | null>(null);
   const [breakdownSuggestion, setBreakdownSuggestion] = useState<BreakdownSuggestion | null>(null);
@@ -71,6 +77,34 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus }: TaskDetail
     setDueDateSuggestion(null);
     setBreakdownSuggestion(null);
   }, [task.id, task.title, task.notes]);
+
+  // Handle resize drag
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, window.innerWidth - e.clientX));
+      onWidthChange?.(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, onWidthChange]);
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateTaskInput) => window.electronAPI.tasks.update(task.id, input),
@@ -168,7 +202,25 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus }: TaskDetail
   const tierInfo = task.priority_tier ? PRIORITY_TIERS[task.priority_tier] : null;
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div
+      className={cn(
+        "h-full flex flex-col bg-background relative",
+        !isResizing && "transition-all duration-200"
+      )}
+      style={width ? { width: `${width}px` } : undefined}
+    >
+      {/* Resize Handle */}
+      <div
+        className={cn(
+          "absolute top-0 left-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/30 transition-colors",
+          isResizing && "bg-primary/50"
+        )}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setIsResizing(true);
+        }}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <h3 className="font-medium">Task Details</h3>
