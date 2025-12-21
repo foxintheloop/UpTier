@@ -17,6 +17,9 @@ import type {
   CreateTagInput,
   UpdateTagInput,
   GetTasksOptions,
+  FocusSession,
+  FocusSessionWithTask,
+  StartFocusSessionInput,
 } from '@uptier/shared';
 
 // Types for settings and notifications
@@ -259,6 +262,20 @@ const electronAPI = {
       ipcRenderer.invoke('suggestions:getBreakdown', taskId),
     getAll: (taskId: string): Promise<TaskSuggestions> =>
       ipcRenderer.invoke('suggestions:getAll', taskId),
+  },
+
+  // Focus Sessions
+  focus: {
+    start: (input: StartFocusSessionInput): Promise<FocusSession> =>
+      ipcRenderer.invoke('focus:start', input),
+    end: (id: string, completed: boolean): Promise<FocusSession | null> =>
+      ipcRenderer.invoke('focus:end', id, completed),
+    getActive: (): Promise<FocusSessionWithTask | null> =>
+      ipcRenderer.invoke('focus:getActive'),
+    getAll: (taskId?: string): Promise<FocusSessionWithTask[]> =>
+      ipcRenderer.invoke('focus:getAll', taskId),
+    delete: (id: string): Promise<boolean> =>
+      ipcRenderer.invoke('focus:delete', id),
   },
 
   // Logging API for renderer

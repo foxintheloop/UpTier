@@ -6,13 +6,26 @@ import type { TaskListHandle } from './components/TaskList';
 import { TaskDetail } from './components/TaskDetail';
 import { GoalDetail } from './components/GoalDetail';
 import { Settings } from './components/Settings';
+import { FocusTimerOverlay } from './components/FocusTimerOverlay';
 import { Toaster } from './components/ui/toaster';
-import type { TaskWithGoals, GoalWithProgress } from '@uptier/shared';
+import type { TaskWithGoals, GoalWithProgress, Task } from '@uptier/shared';
+
+// Default focus duration in minutes
+const DEFAULT_FOCUS_DURATION = 90;
+
+interface ActiveFocusSession {
+  sessionId: string;
+  task: Task;
+  durationMinutes: number;
+}
 
 type ThemeMode = 'dark' | 'light' | 'system';
 
 const SIDEBAR_WIDTH_KEY = 'uptier-sidebar-width';
 const DEFAULT_SIDEBAR_WIDTH = 256;
+
+const DETAIL_WIDTH_KEY = 'uptier-detail-width';
+const DEFAULT_DETAIL_WIDTH = 384;
 
 // Apply theme to document
 function applyTheme(theme: ThemeMode) {
@@ -36,7 +49,12 @@ export default function App() {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_SIDEBAR_WIDTH;
   });
+  const [detailPanelWidth, setDetailPanelWidth] = useState(() => {
+    const saved = localStorage.getItem(DETAIL_WIDTH_KEY);
+    return saved ? parseInt(saved, 10) : DEFAULT_DETAIL_WIDTH;
+  });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [activeFocusSession, setActiveFocusSession] = useState<ActiveFocusSession | null>(null);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
 
@@ -44,6 +62,12 @@ export default function App() {
   const handleSidebarWidthChange = useCallback((width: number) => {
     setSidebarWidth(width);
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width));
+  }, []);
+
+  // Save detail panel width to localStorage when it changes
+  const handleDetailWidthChange = useCallback((width: number) => {
+    setDetailPanelWidth(width);
+    localStorage.setItem(DETAIL_WIDTH_KEY, String(width));
   }, []);
 
   // Track window width for responsive behavior
@@ -129,6 +153,34 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
     }
   }, [selectedTask, queryClient]);
+
+  // Handle starting a focus session
+  const handleStartFocus = useCallback(async (task: TaskWithGoals, durationMinutes: number = DEFAULT_FOCUS_DURATION) => {
+    try {
+      const session = await window.electronAPI.focus.start({
+        task_id: task.id,
+        duration_minutes: durationMinutes,
+      });
+      setActiveFocusSession({
+        sessionId: session.id,
+        task,
+        durationMinutes,
+      });
+    } catch (error) {
+      console.error('Failed to start focus session:', error);
+    }
+  }, []);
+
+  // Handle ending a focus session
+  const handleEndFocus = useCallback(async (completed: boolean) => {
+    if (!activeFocusSession) return;
+    try {
+      await window.electronAPI.focus.end(activeFocusSession.sessionId, completed);
+    } catch (error) {
+      console.error('Failed to end focus session:', error);
+    }
+    setActiveFocusSession(null);
+  }, [activeFocusSession]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -246,6 +298,7 @@ export default function App() {
                 setSelectedTask(task);
                 setSelectedGoal(null);
               }}
+              onStartFocus={(task) => handleStartFocus(task, DEFAULT_FOCUS_DURATION)}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -259,13 +312,14 @@ export default function App() {
 
         {/* Task Detail Panel */}
         {selectedTask && !selectedGoal && (
-          <div className="w-96 overflow-hidden">
-            <TaskDetail
-              task={selectedTask}
-              onClose={() => setSelectedTask(null)}
-              onUpdate={(updated) => setSelectedTask(updated)}
-            />
-          </div>
+          <TaskDetail
+            task={selectedTask}
+            onClose={() => setSelectedTask(null)}
+            onUpdate={(updated) => setSelectedTask(updated)}
+            onStartFocus={handleStartFocus}
+            width={detailPanelWidth}
+            onWidthChange={handleDetailWidthChange}
+          />
         )}
 
         {/* Goal Detail Panel */}
@@ -293,6 +347,16 @@ export default function App() {
 
       {/* Toast notifications */}
       <Toaster />
+
+      {/* Focus Timer Overlay */}
+      {activeFocusSession && (
+        <FocusTimerOverlay
+          task={activeFocusSession.task}
+          durationMinutes={activeFocusSession.durationMinutes}
+          sessionId={activeFocusSession.sessionId}
+          onEnd={handleEndFocus}
+        />
+      )}
     </div>
   );
 }

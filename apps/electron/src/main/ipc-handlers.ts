@@ -26,6 +26,13 @@ import {
 import type { UpTierExport, ImportPreview, ImportResult } from './export-import';
 import { suggestDueDate, suggestBreakdown, getTaskSuggestions } from './ai-suggestions';
 import type { DueDateSuggestion, BreakdownSuggestion, TaskSuggestions } from './ai-suggestions';
+import {
+  startFocusSession,
+  endFocusSession,
+  getActiveFocusSession,
+  getFocusSessions,
+  deleteFocusSession,
+} from './focus';
 import type {
   List,
   ListWithCount,
@@ -44,6 +51,7 @@ import type {
   CreateTagInput,
   UpdateTagInput,
   GetTasksOptions,
+  StartFocusSessionInput,
 } from '@uptier/shared';
 import { DEFAULT_LIST_ICON, DEFAULT_LIST_COLOR } from '@uptier/shared';
 
@@ -861,5 +869,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('suggestions:getBreakdown', withLogging('suggestions:getBreakdown', (_, taskId: string) => suggestBreakdown(taskId)));
   ipcMain.handle('suggestions:getAll', withLogging('suggestions:getAll', (_, taskId: string) => getTaskSuggestions(taskId)));
 
-  ipcLog.info('IPC handlers registered', { count: 52 });
+  // Focus Sessions
+  ipcMain.handle('focus:start', withLogging('focus:start', (_, input: StartFocusSessionInput) => startFocusSession(input)));
+  ipcMain.handle('focus:end', withLogging('focus:end', (_, id: string, completed: boolean) => endFocusSession(id, completed)));
+  ipcMain.handle('focus:getActive', withLogging('focus:getActive', () => getActiveFocusSession()));
+  ipcMain.handle('focus:getAll', withLogging('focus:getAll', (_, taskId?: string) => getFocusSessions(taskId)));
+  ipcMain.handle('focus:delete', withLogging('focus:delete', (_, id: string) => deleteFocusSession(id)));
+
+  ipcLog.info('IPC handlers registered', { count: 57 });
 }

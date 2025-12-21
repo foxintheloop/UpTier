@@ -27,6 +27,7 @@ interface TaskListProps {
   listId: string;
   selectedTaskId?: string;
   onSelectTask: (task: TaskWithGoals | null) => void;
+  onStartFocus?: (task: TaskWithGoals) => void;
 }
 
 export interface TaskListHandle {
@@ -47,7 +48,7 @@ const SMART_LIST_EMPTY_STATES: Record<string, { title: string; subtitle: string 
 };
 
 export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskList(
-  { listId, selectedTaskId, onSelectTask },
+  { listId, selectedTaskId, onSelectTask, onStartFocus },
   ref
 ) {
   const queryClient = useQueryClient();
@@ -191,6 +192,7 @@ export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskL
               isSelected={task.id === selectedTaskId}
               onSelect={() => onSelectTask(task)}
               onComplete={(completed) => handleTaskComplete(task.id, completed)}
+              onStartFocus={onStartFocus}
               isDraggable={!isSmartListView}
             />
           ))}
@@ -290,6 +292,7 @@ export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskL
                             isSelected={task.id === selectedTaskId}
                             onSelect={() => onSelectTask(task)}
                             onComplete={(completed) => handleTaskComplete(task.id, completed)}
+                            onStartFocus={onStartFocus}
                             isDraggable={!isSmartListView}
                           />
                         ))}

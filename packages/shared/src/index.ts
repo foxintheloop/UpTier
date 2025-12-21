@@ -23,6 +23,8 @@ export type {
   UpdateTaskInput,
   BulkPriorityUpdate,
   CreateSubtaskInput,
+  CreateTagInput,
+  UpdateTagInput,
   // Query Types
   GetTasksOptions,
   PrioritizeListOptions,
@@ -35,6 +37,11 @@ export type {
   PrioritizationSummary,
   // Smart List Types
   SmartListFilter,
+  // Focus Session Types
+  FocusSession,
+  StartFocusSessionInput,
+  EndFocusSessionInput,
+  FocusSessionWithTask,
 } from './types.js';
 
 // Constants

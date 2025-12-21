@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2 } from 'lucide-react';
+import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -8,8 +8,16 @@ import { Badge } from './ui/badge';
 import { TagPicker } from './TagPicker';
 import { TagBadge } from './TagBadge';
 import { GoalPicker } from './GoalPicker';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
+
+const FOCUS_DURATIONS = [
+  { value: 30, label: '30 min' },
+  { value: 45, label: '45 min' },
+  { value: 60, label: '60 min' },
+  { value: 90, label: '90 min' },
+];
 import { PRIORITY_SCALES, PRIORITY_TIERS } from '@uptier/shared';
 import { format, parseISO } from 'date-fns';
 
@@ -20,7 +28,13 @@ interface TaskDetailProps {
   task: TaskWithGoals;
   onClose: () => void;
   onUpdate: (task: TaskWithGoals) => void;
+  onStartFocus?: (task: TaskWithGoals, durationMinutes: number) => void;
+  width?: number;
+  onWidthChange?: (width: number) => void;
 }
+
+const MIN_DETAIL_WIDTH = 300;
+const MAX_DETAIL_WIDTH = 600;
 
 interface DueDateSuggestion {
   suggestedDate: string;
@@ -40,10 +54,13 @@ interface BreakdownSuggestion {
   reasoning: string;
 }
 
-export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
+export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWidthChange }: TaskDetailProps) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes || '');
   const [showDueDateSuggestion, setShowDueDateSuggestion] = useState(false);
+  const [customDuration, setCustomDuration] = useState('');
+  const [focusPopoverOpen, setFocusPopoverOpen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [showBreakdownSuggestion, setShowBreakdownSuggestion] = useState(false);
   const [dueDateSuggestion, setDueDateSuggestion] = useState<DueDateSuggestion | null>(null);
   const [breakdownSuggestion, setBreakdownSuggestion] = useState<BreakdownSuggestion | null>(null);
@@ -60,6 +77,34 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
     setDueDateSuggestion(null);
     setBreakdownSuggestion(null);
   }, [task.id, task.title, task.notes]);
+
+  // Handle resize drag
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, window.innerWidth - e.clientX));
+      onWidthChange?.(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, onWidthChange]);
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateTaskInput) => window.electronAPI.tasks.update(task.id, input),
@@ -157,13 +202,92 @@ export function TaskDetail({ task, onClose, onUpdate }: TaskDetailProps) {
   const tierInfo = task.priority_tier ? PRIORITY_TIERS[task.priority_tier] : null;
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div
+      className={cn(
+        "h-full flex flex-col bg-background relative",
+        !isResizing && "transition-all duration-200"
+      )}
+      style={width ? { width: `${width}px` } : undefined}
+    >
+      {/* Resize Handle */}
+      <div
+        className={cn(
+          "absolute top-0 left-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/30 transition-colors",
+          isResizing && "bg-primary/50"
+        )}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setIsResizing(true);
+        }}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <h3 className="font-medium">Task Details</h3>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Focus Button with Duration Picker */}
+          {!task.completed && onStartFocus && (
+            <Popover open={focusPopoverOpen} onOpenChange={setFocusPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Play className="h-4 w-4" />
+                  Focus
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" align="end">
+                <div className="space-y-1">
+                  {FOCUS_DURATIONS.map((duration) => (
+                    <Button
+                      key={duration.value}
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => {
+                        setFocusPopoverOpen(false);
+                        onStartFocus(task, duration.value);
+                      }}
+                    >
+                      {duration.label}
+                    </Button>
+                  ))}
+                  <div className="pt-1 border-t border-border mt-1">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Custom"
+                        value={customDuration}
+                        onChange={(e) => setCustomDuration(e.target.value)}
+                        className="h-8 text-sm"
+                        min={1}
+                        max={480}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2"
+                        disabled={!customDuration || parseInt(customDuration) < 1}
+                        onClick={() => {
+                          const duration = parseInt(customDuration);
+                          if (duration >= 1) {
+                            setFocusPopoverOpen(false);
+                            onStartFocus(task, duration);
+                            setCustomDuration('');
+                          }
+                        }}
+                      >
+                        Go
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
