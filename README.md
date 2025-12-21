@@ -12,6 +12,12 @@ UpTier is a desktop to-do application that combines a clean Microsoft To Do-styl
 
 https://github.com/user-attachments/assets/71264f79-3f54-4b45-9d7e-dcef26f54f94
 
+## Download
+
+**[Download UpTier for Windows](https://github.com/foxintheloop/uptier/releases/latest)**
+
+Pre-built installer available. No build required.
+
 ## Features
 
 ### Task Management
@@ -260,6 +266,7 @@ Application logs are stored at:
 - [x] Data export
 - [x] List rename/delete
 - [x] Focus timer
+- [x] Resizable panels
 - [ ] Recurring tasks
 - [ ] Custom smart list filters
 - [ ] Calendar integration
