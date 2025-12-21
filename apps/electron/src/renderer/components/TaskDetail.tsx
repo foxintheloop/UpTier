@@ -54,6 +54,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus }: TaskDetail
   const [notes, setNotes] = useState(task.notes || '');
   const [showDueDateSuggestion, setShowDueDateSuggestion] = useState(false);
   const [customDuration, setCustomDuration] = useState('');
+  const [focusPopoverOpen, setFocusPopoverOpen] = useState(false);
   const [showBreakdownSuggestion, setShowBreakdownSuggestion] = useState(false);
   const [dueDateSuggestion, setDueDateSuggestion] = useState<DueDateSuggestion | null>(null);
   const [breakdownSuggestion, setBreakdownSuggestion] = useState<BreakdownSuggestion | null>(null);
@@ -174,7 +175,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus }: TaskDetail
         <div className="flex items-center gap-2">
           {/* Focus Button with Duration Picker */}
           {!task.completed && onStartFocus && (
-            <Popover>
+            <Popover open={focusPopoverOpen} onOpenChange={setFocusPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1">
                   <Play className="h-4 w-4" />
@@ -190,7 +191,10 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus }: TaskDetail
                       variant="ghost"
                       size="sm"
                       className="w-full justify-start"
-                      onClick={() => onStartFocus(task, duration.value)}
+                      onClick={() => {
+                        setFocusPopoverOpen(false);
+                        onStartFocus(task, duration.value);
+                      }}
                     >
                       {duration.label}
                     </Button>
@@ -214,6 +218,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus }: TaskDetail
                         onClick={() => {
                           const duration = parseInt(customDuration);
                           if (duration >= 1) {
+                            setFocusPopoverOpen(false);
                             onStartFocus(task, duration);
                             setCustomDuration('');
                           }
