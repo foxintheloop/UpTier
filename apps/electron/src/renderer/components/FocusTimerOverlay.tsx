@@ -110,6 +110,13 @@ export function FocusTimerOverlay({
           {task.title}
         </h2>
 
+        {/* Task Notes */}
+        {task.notes && (
+          <p className="text-sm text-muted-foreground max-w-md text-center line-clamp-3">
+            {task.notes}
+          </p>
+        )}
+
         {/* Timer Circle */}
         <div className="relative">
           <svg
