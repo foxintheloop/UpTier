@@ -4,6 +4,7 @@ import {
   Sun,
   Star,
   Calendar,
+  CalendarDays,
   CheckCircle2,
   List,
   Plus,
@@ -56,6 +57,7 @@ const SMART_LISTS = [
   { id: 'smart:my_day', name: 'My Day', icon: Sun, color: '#f59e0b' },
   { id: 'smart:important', name: 'Important', icon: Star, color: '#ef4444' },
   { id: 'smart:planned', name: 'Planned', icon: Calendar, color: '#3b82f6' },
+  { id: 'smart:calendar', name: 'Calendar', icon: CalendarDays, color: '#8b5cf6' },
   { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 

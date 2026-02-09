@@ -5,6 +5,7 @@ import { TaskList } from './components/TaskList';
 import type { TaskListHandle } from './components/TaskList';
 import { TaskDetail } from './components/TaskDetail';
 import { GoalDetail } from './components/GoalDetail';
+import { CalendarView } from './components/CalendarView';
 import { Settings } from './components/Settings';
 import { FocusTimerOverlay } from './components/FocusTimerOverlay';
 import { Toaster } from './components/ui/toaster';
@@ -289,7 +290,15 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden">
         {/* Task List */}
         <div className={`flex-1 overflow-hidden ${selectedTask || selectedGoal ? 'border-r border-border' : ''}`}>
-          {selectedListId ? (
+          {selectedListId === 'smart:calendar' ? (
+            <CalendarView
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                setSelectedGoal(null);
+              }}
+              selectedTaskId={selectedTask?.id}
+            />
+          ) : selectedListId ? (
             <TaskList
               ref={taskListRef}
               listId={selectedListId}

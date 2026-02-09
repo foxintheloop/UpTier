@@ -174,7 +174,7 @@ function deleteList(id: string): boolean {
 // ============================================================================
 
 // Smart list ID prefixes
-const SMART_LIST_IDS = ['smart:my_day', 'smart:important', 'smart:planned', 'smart:completed'];
+const SMART_LIST_IDS = ['smart:my_day', 'smart:important', 'smart:planned', 'smart:calendar', 'smart:completed'];
 
 function isSmartListId(id: string | undefined): boolean {
   return id !== undefined && id.startsWith('smart:');
@@ -201,6 +201,9 @@ function getSmartListTasks(smartListId: string): TaskWithGoals[] {
       // Tasks with due dates
       sql = `SELECT t.* FROM tasks t WHERE t.due_date IS NOT NULL AND t.completed = 0 ORDER BY t.due_date ASC, t.priority_tier ASC NULLS LAST`;
       break;
+    case 'smart:calendar':
+      // Calendar view uses its own date-range endpoint; return empty for list-based queries
+      return [];
     case 'smart:completed':
       // Completed tasks (recent first)
       sql = `SELECT t.* FROM tasks t WHERE t.completed = 1 ORDER BY t.completed_at DESC LIMIT 100`;
@@ -210,6 +213,51 @@ function getSmartListTasks(smartListId: string): TaskWithGoals[] {
   }
 
   const tasks = db.prepare(sql).all(...params) as Task[];
+
+  const goalQuery = db.prepare(`
+    SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
+    FROM task_goals tg
+    JOIN goals g ON g.id = tg.goal_id
+    WHERE tg.task_id = ?
+  `);
+
+  const tagQuery = db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM tags t
+    JOIN task_tags tt ON tt.tag_id = t.id
+    WHERE tt.task_id = ?
+  `);
+
+  return tasks.map((task) => {
+    const goals = goalQuery.all(task.id) as Array<{
+      goal_id: string;
+      goal_name: string;
+      alignment_strength: number;
+    }>;
+    const tags = tagQuery.all(task.id) as Tag[];
+
+    return {
+      ...task,
+      completed: Boolean(task.completed),
+      goals: goals.map((g) => ({
+        goal_id: g.goal_id,
+        goal_name: g.goal_name,
+        alignment_strength: g.alignment_strength,
+      })),
+      tags,
+    };
+  });
+}
+
+function getTasksByDateRange(startDate: string, endDate: string): TaskWithGoals[] {
+  const db = getDb();
+
+  const tasks = db.prepare(`
+    SELECT t.* FROM tasks t
+    WHERE t.due_date >= ? AND t.due_date <= ?
+    AND t.completed = 0
+    ORDER BY t.due_date ASC, t.due_time ASC NULLS LAST, t.priority_tier ASC NULLS LAST
+  `).all(startDate, endDate) as Task[];
 
   const goalQuery = db.prepare(`
     SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
@@ -800,6 +848,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:complete', withLogging('tasks:complete', (_, id: string) => completeTask(id)));
   ipcMain.handle('tasks:uncomplete', withLogging('tasks:uncomplete', (_, id: string) => uncompleteTask(id)));
   ipcMain.handle('tasks:reorder', withLogging('tasks:reorder', (_, listId: string, taskIds: string[]) => reorderTasks(listId, taskIds)));
+  ipcMain.handle('tasks:getByDateRange', withLogging('tasks:getByDateRange', (_, startDate: string, endDate: string) => getTasksByDateRange(startDate, endDate)));
 
   // Goals
   ipcMain.handle('goals:getAll', withLogging('goals:getAll', () => getGoals()));
