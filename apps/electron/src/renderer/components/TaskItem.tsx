@@ -4,7 +4,7 @@ import { Checkbox } from './ui/checkbox';
 import { PriorityBadge } from './PriorityBadge';
 import { TagBadge } from './TagBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Clock, Target, Zap, Gem, GripVertical, Play } from 'lucide-react';
+import { Clock, Target, Zap, Gem, GripVertical, Play, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals } from '@uptier/shared';
 import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
@@ -170,11 +170,12 @@ export function TaskItem({ task, isSelected, onSelect, onComplete, onStartFocus,
             {task.due_date && (
               <div
                 className={cn(
-                  'text-xs',
+                  'text-xs flex items-center gap-1',
                   isDueOverdue ? 'text-red-400' : 'text-muted-foreground'
                 )}
               >
                 {formatDueDate(task.due_date)}
+                {task.recurrence_rule && <Repeat className="h-3 w-3" />}
               </div>
             )}
 

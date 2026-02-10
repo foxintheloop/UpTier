@@ -59,6 +59,16 @@ function getSchema(): string {
   throw error;
 }
 
+function runMigrations(database: Database.Database): void {
+  // Add recurrence_end_date column if missing (added for recurring tasks feature)
+  const columns = database.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+  const hasRecurrenceEndDate = columns.some(c => c.name === 'recurrence_end_date');
+  if (!hasRecurrenceEndDate) {
+    database.exec('ALTER TABLE tasks ADD COLUMN recurrence_end_date TEXT');
+    dbLog.info('Migration: added recurrence_end_date column to tasks');
+  }
+}
+
 function openDatabase(dbPath: string): Database.Database {
   dbLog.info('Opening database', { path: dbPath });
 
@@ -79,6 +89,9 @@ function openDatabase(dbPath: string): Database.Database {
   const schema = getSchema();
   database.exec(schema);
   dbLog.info('Database schema applied');
+
+  // Migrations for existing databases
+  runMigrations(database);
 
   return database;
 }

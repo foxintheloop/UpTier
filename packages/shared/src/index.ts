@@ -6,6 +6,8 @@ export type {
   PriorityTier,
   GoalStatus,
   PrioritizationStrategy,
+  RecurrenceFrequency,
+  RecurrenceRule,
   // Core Entities
   List,
   Goal,

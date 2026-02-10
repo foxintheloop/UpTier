@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronLeft,
   ChevronRight,
+  Repeat,
 } from 'lucide-react';
 import {
   DndContext,
@@ -102,6 +103,7 @@ function CalendarTaskItem({ task, isSelected, onSelect, compact, isOverlay }: Ca
       )}
     >
       <span className="truncate">{task.title}</span>
+      {task.recurrence_rule && <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" />}
       {!compact && task.due_time && (
         <span className="text-muted-foreground ml-1">{task.due_time}</span>
       )}
