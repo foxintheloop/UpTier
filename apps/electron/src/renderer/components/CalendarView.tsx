@@ -1,9 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+} from '@dnd-kit/core';
+import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
 import {
   startOfWeek,
   endOfWeek,
@@ -52,7 +62,7 @@ const VIEW_MODE_OPTIONS: { value: CalendarViewMode; label: string; shortLabel: s
 const MAX_MONTH_VISIBLE_TASKS = 3;
 
 // ============================================================================
-// CalendarTaskItem
+// CalendarTaskItem (draggable)
 // ============================================================================
 
 interface CalendarTaskItemProps {
@@ -60,11 +70,20 @@ interface CalendarTaskItemProps {
   isSelected: boolean;
   onSelect: () => void;
   compact: boolean;
+  isOverlay?: boolean;
 }
 
-function CalendarTaskItem({ task, isSelected, onSelect, compact }: CalendarTaskItemProps) {
+function CalendarTaskItem({ task, isSelected, onSelect, compact, isOverlay }: CalendarTaskItemProps) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.id,
+    data: { task },
+  });
+
   return (
     <div
+      ref={isOverlay ? undefined : setNodeRef}
+      {...(isOverlay ? {} : listeners)}
+      {...(isOverlay ? {} : attributes)}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -78,6 +97,8 @@ function CalendarTaskItem({ task, isSelected, onSelect, compact }: CalendarTaskI
         task.priority_tier === 2 && 'border-l-2 border-amber-500',
         task.priority_tier === 3 && 'border-l-2 border-gray-500',
         !task.priority_tier && 'border-l-2 border-transparent',
+        isDragging && !isOverlay && 'opacity-30',
+        isOverlay && 'bg-accent shadow-lg opacity-90',
       )}
     >
       <span className="truncate">{task.title}</span>
@@ -89,10 +110,11 @@ function CalendarTaskItem({ task, isSelected, onSelect, compact }: CalendarTaskI
 }
 
 // ============================================================================
-// CalendarDayCell
+// CalendarDayCell (droppable)
 // ============================================================================
 
 interface CalendarDayCellProps {
+  dateKey: string;
   date: Date;
   tasks: TaskWithGoals[];
   isCurrentMonth: boolean;
@@ -102,6 +124,7 @@ interface CalendarDayCellProps {
 }
 
 function CalendarDayCell({
+  dateKey,
   date,
   tasks,
   isCurrentMonth,
@@ -109,6 +132,7 @@ function CalendarDayCell({
   onSelectTask,
   selectedTaskId,
 }: CalendarDayCellProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: dateKey });
   const today = isToday(date);
   const isMonthView = viewMode === 'month';
   const visibleTasks = isMonthView ? tasks.slice(0, MAX_MONTH_VISIBLE_TASKS) : tasks;
@@ -135,9 +159,11 @@ function CalendarDayCell({
 
   return (
     <div
+      ref={setNodeRef}
       className={cn(
-        'border-r border-b border-border p-1 flex flex-col min-h-0 overflow-hidden',
+        'border-r border-b border-border p-1 flex flex-col min-h-0 overflow-hidden transition-colors',
         !isCurrentMonth && 'bg-muted/20',
+        isOver && 'bg-primary/10 ring-1 ring-inset ring-primary/40',
       )}
     >
       {/* Day number */}
@@ -233,12 +259,21 @@ function CalendarToolbar({
 // ============================================================================
 
 export function CalendarView({ onSelectTask, selectedTaskId }: CalendarViewProps) {
+  const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState<CalendarViewMode>(() => {
     const saved = localStorage.getItem(CALENDAR_VIEW_MODE_KEY);
     if (saved === 'business-week' || saved === 'week' || saved === 'month') return saved;
     return 'week';
   });
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [activeDragTask, setActiveDragTask] = useState<TaskWithGoals | null>(null);
+
+  // Drag-and-drop sensors (8px distance to prevent click-vs-drag ambiguity)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  );
 
   // Persist view mode
   useEffect(() => {
@@ -300,6 +335,27 @@ export function CalendarView({ onSelectTask, selectedTaskId }: CalendarViewProps
     return map;
   }, [tasks, days]);
 
+  // Drag handlers
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const task = event.active.data.current?.task as TaskWithGoals | undefined;
+    setActiveDragTask(task ?? null);
+  }, []);
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    setActiveDragTask(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const task = active.data.current?.task as TaskWithGoals | undefined;
+    if (!task) return;
+
+    const newDate = over.id as string; // dateKey in yyyy-MM-dd format
+    if (newDate === task.due_date) return; // dropped on same day
+
+    await window.electronAPI.tasks.update(task.id, { due_date: newDate });
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  }, [queryClient]);
+
   // Navigation handlers
   const navigatePrev = () => {
     setCurrentDate((prev) =>
@@ -350,44 +406,64 @@ export function CalendarView({ onSelectTask, selectedTaskId }: CalendarViewProps
       />
 
       {/* Calendar Grid */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Day name headers */}
-        <div className={cn('grid border-b border-border flex-shrink-0', gridCols)}>
-          {dayNames.map((name) => (
-            <div
-              key={name}
-              className="text-xs font-medium text-muted-foreground text-center py-2 border-r border-border last:border-r-0"
-            >
-              {name}
-            </div>
-          ))}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {/* Day name headers */}
+          <div className={cn('grid border-b border-border flex-shrink-0', gridCols)}>
+            {dayNames.map((name) => (
+              <div
+                key={name}
+                className="text-xs font-medium text-muted-foreground text-center py-2 border-r border-border last:border-r-0"
+              >
+                {name}
+              </div>
+            ))}
+          </div>
+
+          {/* Day cells grid */}
+          <div
+            className={cn('grid flex-1 min-h-0 overflow-hidden', gridCols)}
+            style={{
+              gridTemplateRows: viewMode === 'month'
+                ? `repeat(${weekRows}, minmax(0, 1fr))`
+                : 'minmax(0, 1fr)',
+            }}
+          >
+            {days.map((day) => {
+              const dateKey = format(day, 'yyyy-MM-dd');
+              return (
+                <CalendarDayCell
+                  key={dateKey}
+                  dateKey={dateKey}
+                  date={day}
+                  tasks={tasksByDay.get(dateKey) || []}
+                  isCurrentMonth={viewMode !== 'month' || isSameMonth(day, currentDate)}
+                  viewMode={viewMode}
+                  onSelectTask={onSelectTask}
+                  selectedTaskId={selectedTaskId}
+                />
+              );
+            })}
+          </div>
         </div>
 
-        {/* Day cells grid */}
-        <div
-          className={cn('grid flex-1 min-h-0 overflow-hidden', gridCols)}
-          style={{
-            gridTemplateRows: viewMode === 'month'
-              ? `repeat(${weekRows}, minmax(0, 1fr))`
-              : 'minmax(0, 1fr)',
-          }}
-        >
-          {days.map((day) => {
-            const dateKey = format(day, 'yyyy-MM-dd');
-            return (
-              <CalendarDayCell
-                key={dateKey}
-                date={day}
-                tasks={tasksByDay.get(dateKey) || []}
-                isCurrentMonth={viewMode !== 'month' || isSameMonth(day, currentDate)}
-                viewMode={viewMode}
-                onSelectTask={onSelectTask}
-                selectedTaskId={selectedTaskId}
-              />
-            );
-          })}
-        </div>
-      </div>
+        {/* Drag overlay - floating task preview */}
+        <DragOverlay dropAnimation={null}>
+          {activeDragTask && (
+            <CalendarTaskItem
+              task={activeDragTask}
+              isSelected={false}
+              onSelect={() => {}}
+              compact={viewMode === 'month'}
+              isOverlay
+            />
+          )}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
