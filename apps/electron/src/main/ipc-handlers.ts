@@ -189,7 +189,7 @@ function isSmartListId(id: string | undefined): boolean {
 
 function getSmartListTasks(smartListId: string): TaskWithGoals[] {
   const db = getDb();
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  const today = format(new Date(), 'yyyy-MM-dd');
 
   let sql = '';
   const params: unknown[] = [];
