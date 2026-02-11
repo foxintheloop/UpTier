@@ -20,6 +20,7 @@ import {
   Pencil,
   PanelLeftClose,
   PanelLeft,
+  Search,
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -42,6 +43,7 @@ interface SidebarProps {
   selectedGoalId: string | null;
   onSelectGoal: (goal: GoalWithProgress | null) => void;
   onSettingsClick: () => void;
+  onSearchClick?: () => void;
   onDatabaseSwitch?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -69,7 +71,7 @@ const TIMEFRAME_COLORS: Record<Timeframe, string> = {
   yearly: 'text-red-400',
 };
 
-export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelectGoal, onSettingsClick, onDatabaseSwitch, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
+export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelectGoal, onSettingsClick, onSearchClick, onDatabaseSwitch, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listsExpanded, setListsExpanded] = useState(true);
@@ -330,6 +332,27 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
             </button>
           )}
         </div>
+
+        {/* Search Trigger */}
+        {onSearchClick && !collapsed && (
+          <button
+            onClick={onSearchClick}
+            className="w-full flex items-center gap-2 px-2 py-1.5 mt-2 rounded-md text-xs bg-secondary/50 hover:bg-secondary border border-border transition-colors text-muted-foreground"
+          >
+            <Search className="h-3 w-3" />
+            <span className="flex-1 text-left">Search...</span>
+            <kbd className="text-[10px] bg-secondary rounded px-1 py-0.5">Ctrl+K</kbd>
+          </button>
+        )}
+        {onSearchClick && collapsed && (
+          <button
+            onClick={onSearchClick}
+            className="w-full flex items-center justify-center p-2 mt-1 rounded-md text-muted-foreground hover:bg-accent transition-colors"
+            title="Search (Ctrl+K)"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        )}
 
         {/* Database Switcher */}
         {!collapsed && (

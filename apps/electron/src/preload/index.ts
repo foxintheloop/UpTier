@@ -167,6 +167,8 @@ const electronAPI = {
       ipcRenderer.invoke('tasks:removeGoal', taskId, goalId),
     getByDateRange: (startDate: string, endDate: string): Promise<TaskWithGoals[]> =>
       ipcRenderer.invoke('tasks:getByDateRange', startDate, endDate),
+    search: (query: string, limit?: number): Promise<TaskWithGoals[]> =>
+      ipcRenderer.invoke('tasks:search', query, limit),
   },
 
   // Goals
