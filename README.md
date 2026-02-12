@@ -12,6 +12,12 @@ UpTier is a desktop to-do application that combines a clean Microsoft To Do-styl
 
 https://github.com/user-attachments/assets/71264f79-3f54-4b45-9d7e-dcef26f54f94
 
+## Download
+
+**[Download UpTier for Windows](https://github.com/foxintheloop/uptier/releases/latest)**
+
+Pre-built installer available. No build required.
+
 ## Features
 
 ### Task Management
@@ -94,10 +100,15 @@ pnpm approve-builds
 # Rebuild native modules
 pnpm rebuild
 
+# Rebuild better-sqlite3 for Electron's bundled Node.js
+npx electron-rebuild -f -w better-sqlite3
+
 # Build packages
 pnpm --filter @uptier/shared build
 pnpm --filter @uptier/mcp-server build
 ```
+
+> **Note:** The Electron app bundles its own Node.js runtime (v20.x), which differs from your system Node.js. The `electron-rebuild` step compiles `better-sqlite3` for Electron's version. The MCP server deployment (below) compiles it separately for your system Node.js used by Claude Desktop.
 
 ### Running the App
 
@@ -260,6 +271,7 @@ Application logs are stored at:
 - [x] Data export
 - [x] List rename/delete
 - [x] Focus timer
+- [x] Resizable panels
 - [ ] Recurring tasks
 - [ ] Custom smart list filters
 - [ ] Calendar integration
@@ -297,6 +309,38 @@ pnpm approve-builds
 ```
 
 Then select the packages that need to run build scripts (canvas, sharp, electron).
+
+### "NODE_MODULE_VERSION mismatch" in Electron app
+
+If the Electron app crashes with `NODE_MODULE_VERSION` mismatch (e.g., "was compiled against a different Node.js version"), rebuild `better-sqlite3` for Electron:
+
+```bash
+npx electron-rebuild -f -w better-sqlite3
+```
+
+This typically happens after upgrading Node.js or running `pnpm install`, which recompiles native modules for your system Node.js rather than Electron's bundled version.
+
+### "Schema not found" error in Claude Desktop
+
+If the MCP server reports that `schema.sql` cannot be found, the deployed files are stale. Rebuild and redeploy:
+
+```bash
+pnpm --filter @uptier/shared build
+pnpm --filter @uptier/mcp-server build
+pnpm --filter @uptier/mcp-server deploy
+```
+
+### After upgrading Node.js
+
+When you upgrade your system Node.js version, native modules need to be recompiled:
+
+1. **Electron app:** `npx electron-rebuild -f -w better-sqlite3`
+2. **MCP server:** Rebuild and redeploy:
+   ```bash
+   pnpm --filter @uptier/shared build
+   pnpm --filter @uptier/mcp-server build
+   pnpm --filter @uptier/mcp-server deploy
+   ```
 
 ## Contributing
 

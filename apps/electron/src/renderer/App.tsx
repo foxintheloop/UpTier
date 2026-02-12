@@ -5,7 +5,9 @@ import { TaskList } from './components/TaskList';
 import type { TaskListHandle } from './components/TaskList';
 import { TaskDetail } from './components/TaskDetail';
 import { GoalDetail } from './components/GoalDetail';
+import { CalendarView } from './components/CalendarView';
 import { Settings } from './components/Settings';
+import { CommandPalette } from './components/CommandPalette';
 import { FocusTimerOverlay } from './components/FocusTimerOverlay';
 import { Toaster } from './components/ui/toaster';
 import type { TaskWithGoals, GoalWithProgress, Task } from '@uptier/shared';
@@ -55,6 +57,7 @@ export default function App() {
   });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [activeFocusSession, setActiveFocusSession] = useState<ActiveFocusSession | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
 
@@ -185,6 +188,13 @@ export default function App() {
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + K: Toggle command palette (works from any context)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
       // Ignore if typing in an input
       const target = e.target as HTMLElement;
       const isInputActive = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
@@ -279,6 +289,7 @@ export default function App() {
           setSelectedTask(null);
         }}
         onSettingsClick={() => setSettingsOpen(true)}
+        onSearchClick={() => setCommandPaletteOpen(true)}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         width={sidebarWidth}
@@ -289,7 +300,15 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden">
         {/* Task List */}
         <div className={`flex-1 overflow-hidden ${selectedTask || selectedGoal ? 'border-r border-border' : ''}`}>
-          {selectedListId ? (
+          {selectedListId === 'smart:calendar' ? (
+            <CalendarView
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                setSelectedGoal(null);
+              }}
+              selectedTaskId={selectedTask?.id}
+            />
+          ) : selectedListId ? (
             <TaskList
               ref={taskListRef}
               listId={selectedListId}
@@ -343,6 +362,30 @@ export default function App() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         onThemeChange={handleThemeChange}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        onNavigateToList={(listId) => {
+          setSelectedListId(listId);
+          setSelectedTask(null);
+          setSelectedGoal(null);
+        }}
+        onNavigateToGoal={(goal) => {
+          setSelectedGoal(goal);
+          setSelectedTask(null);
+        }}
+        onSelectTask={(task) => {
+          setSelectedTask(task);
+          setSelectedGoal(null);
+          // Navigate to the task's list if it has one
+          if (task.list_id) {
+            setSelectedListId(task.list_id);
+          }
+        }}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       {/* Toast notifications */}

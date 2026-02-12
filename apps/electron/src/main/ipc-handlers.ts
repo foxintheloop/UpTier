@@ -54,6 +54,13 @@ import type {
   StartFocusSessionInput,
 } from '@uptier/shared';
 import { DEFAULT_LIST_ICON, DEFAULT_LIST_COLOR } from '@uptier/shared';
+import { addDays, addWeeks, addMonths, parseISO, format, getDay } from 'date-fns';
+
+// Local type to avoid build-order dependency on shared package
+interface RecurrenceRule {
+  frequency: 'daily' | 'weekdays' | 'weekly' | 'monthly';
+  interval: number;
+}
 
 const ipcLog = createScopedLogger('ipc');
 
@@ -174,7 +181,7 @@ function deleteList(id: string): boolean {
 // ============================================================================
 
 // Smart list ID prefixes
-const SMART_LIST_IDS = ['smart:my_day', 'smart:important', 'smart:planned', 'smart:completed'];
+const SMART_LIST_IDS = ['smart:my_day', 'smart:important', 'smart:planned', 'smart:calendar', 'smart:completed'];
 
 function isSmartListId(id: string | undefined): boolean {
   return id !== undefined && id.startsWith('smart:');
@@ -182,7 +189,7 @@ function isSmartListId(id: string | undefined): boolean {
 
 function getSmartListTasks(smartListId: string): TaskWithGoals[] {
   const db = getDb();
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  const today = format(new Date(), 'yyyy-MM-dd');
 
   let sql = '';
   const params: unknown[] = [];
@@ -201,6 +208,9 @@ function getSmartListTasks(smartListId: string): TaskWithGoals[] {
       // Tasks with due dates
       sql = `SELECT t.* FROM tasks t WHERE t.due_date IS NOT NULL AND t.completed = 0 ORDER BY t.due_date ASC, t.priority_tier ASC NULLS LAST`;
       break;
+    case 'smart:calendar':
+      // Calendar view uses its own date-range endpoint; return empty for list-based queries
+      return [];
     case 'smart:completed':
       // Completed tasks (recent first)
       sql = `SELECT t.* FROM tasks t WHERE t.completed = 1 ORDER BY t.completed_at DESC LIMIT 100`;
@@ -210,6 +220,174 @@ function getSmartListTasks(smartListId: string): TaskWithGoals[] {
   }
 
   const tasks = db.prepare(sql).all(...params) as Task[];
+
+  const goalQuery = db.prepare(`
+    SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
+    FROM task_goals tg
+    JOIN goals g ON g.id = tg.goal_id
+    WHERE tg.task_id = ?
+  `);
+
+  const tagQuery = db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM tags t
+    JOIN task_tags tt ON tt.tag_id = t.id
+    WHERE tt.task_id = ?
+  `);
+
+  return tasks.map((task) => {
+    const goals = goalQuery.all(task.id) as Array<{
+      goal_id: string;
+      goal_name: string;
+      alignment_strength: number;
+    }>;
+    const tags = tagQuery.all(task.id) as Tag[];
+
+    return {
+      ...task,
+      completed: Boolean(task.completed),
+      goals: goals.map((g) => ({
+        goal_id: g.goal_id,
+        goal_name: g.goal_name,
+        alignment_strength: g.alignment_strength,
+      })),
+      tags,
+    };
+  });
+}
+
+function expandRecurringTask(task: Task, rangeStart: string, rangeEnd: string): Task[] {
+  if (!task.recurrence_rule || !task.due_date) return [task];
+
+  let rule: RecurrenceRule;
+  try {
+    rule = JSON.parse(task.recurrence_rule) as RecurrenceRule;
+  } catch {
+    return [task];
+  }
+
+  const rStart = parseISO(rangeStart);
+  const rEnd = parseISO(rangeEnd);
+  const taskEnd = task.recurrence_end_date ? parseISO(task.recurrence_end_date) : rEnd;
+  const effectiveEnd = taskEnd < rEnd ? taskEnd : rEnd;
+
+  const occurrences: Task[] = [];
+  let current = parseISO(task.due_date);
+
+  // Safety limit to prevent infinite loops
+  const maxOccurrences = 366;
+  let count = 0;
+
+  while (current <= effectiveEnd && count < maxOccurrences) {
+    if (current >= rStart) {
+      // For weekdays frequency: skip Sat (6) and Sun (0)
+      const dayOfWeek = getDay(current);
+      if (rule.frequency !== 'weekdays' || (dayOfWeek !== 0 && dayOfWeek !== 6)) {
+        occurrences.push({ ...task, due_date: format(current, 'yyyy-MM-dd') });
+      }
+    }
+
+    // Advance to next occurrence
+    switch (rule.frequency) {
+      case 'daily':
+        current = addDays(current, rule.interval);
+        break;
+      case 'weekdays':
+        current = addDays(current, 1);
+        break;
+      case 'weekly':
+        current = addWeeks(current, rule.interval);
+        break;
+      case 'monthly':
+        current = addMonths(current, rule.interval);
+        break;
+    }
+    count++;
+  }
+
+  return occurrences;
+}
+
+function getTasksByDateRange(startDate: string, endDate: string): TaskWithGoals[] {
+  const db = getDb();
+
+  // Fetch normal (non-recurring) tasks in range
+  const normalTasks = db.prepare(`
+    SELECT t.* FROM tasks t
+    WHERE t.due_date >= ? AND t.due_date <= ?
+    AND t.completed = 0
+    AND (t.recurrence_rule IS NULL OR t.recurrence_rule = '')
+    ORDER BY t.due_date ASC, t.due_time ASC NULLS LAST, t.priority_tier ASC NULLS LAST
+  `).all(startDate, endDate) as Task[];
+
+  // Fetch recurring tasks whose window overlaps the requested range
+  const recurringTasks = db.prepare(`
+    SELECT t.* FROM tasks t
+    WHERE t.recurrence_rule IS NOT NULL AND t.recurrence_rule != ''
+    AND t.completed = 0
+    AND t.due_date <= ?
+    AND (t.recurrence_end_date >= ? OR t.recurrence_end_date IS NULL)
+  `).all(endDate, startDate) as Task[];
+
+  // Expand recurring tasks into virtual occurrences
+  const expandedTasks: Task[] = [];
+  for (const task of recurringTasks) {
+    expandedTasks.push(...expandRecurringTask(task, startDate, endDate));
+  }
+
+  // Merge and sort all tasks
+  const allTasks = [...normalTasks, ...expandedTasks];
+  allTasks.sort((a, b) => {
+    if (a.due_date !== b.due_date) return (a.due_date ?? '').localeCompare(b.due_date ?? '');
+    if (a.due_time !== b.due_time) return (a.due_time ?? 'zz').localeCompare(b.due_time ?? 'zz');
+    return (a.priority_tier ?? 99) - (b.priority_tier ?? 99);
+  });
+
+  const goalQuery = db.prepare(`
+    SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
+    FROM task_goals tg
+    JOIN goals g ON g.id = tg.goal_id
+    WHERE tg.task_id = ?
+  `);
+
+  const tagQuery = db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM tags t
+    JOIN task_tags tt ON tt.tag_id = t.id
+    WHERE tt.task_id = ?
+  `);
+
+  return allTasks.map((task) => {
+    const goals = goalQuery.all(task.id) as Array<{
+      goal_id: string;
+      goal_name: string;
+      alignment_strength: number;
+    }>;
+    const tags = tagQuery.all(task.id) as Tag[];
+
+    return {
+      ...task,
+      completed: Boolean(task.completed),
+      goals: goals.map((g) => ({
+        goal_id: g.goal_id,
+        goal_name: g.goal_name,
+        alignment_strength: g.alignment_strength,
+      })),
+      tags,
+    };
+  });
+}
+
+function searchTasks(query: string, limit: number = 20): TaskWithGoals[] {
+  const db = getDb();
+  ipcLog.debug('Searching tasks', { query, limit });
+
+  const tasks = db.prepare(`
+    SELECT * FROM tasks
+    WHERE completed = 0 AND title LIKE ?
+    ORDER BY updated_at DESC
+    LIMIT ?
+  `).all(`%${query}%`, limit) as Task[];
 
   const goalQuery = db.prepare(`
     SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
@@ -323,8 +501,9 @@ function createTask(input: CreateTaskInput): Task {
       effort_score, impact_score, urgency_score, importance_score,
       priority_tier, priority_reasoning,
       estimated_minutes, energy_required, context_tags,
+      recurrence_rule, recurrence_end_date,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, input.list_id, input.title, input.notes ?? null,
     input.due_date ?? null, input.due_time ?? null, input.reminder_at ?? null,
@@ -334,6 +513,7 @@ function createTask(input: CreateTaskInput): Task {
     input.priority_tier ?? null, input.priority_reasoning ?? null,
     input.estimated_minutes ?? null, input.energy_required ?? null,
     input.context_tags ? JSON.stringify(input.context_tags) : null,
+    input.recurrence_rule ?? null, input.recurrence_end_date ?? null,
     now, now
   );
 
@@ -360,6 +540,7 @@ function updateTask(id: string, input: UpdateTaskInput): Task | null {
     ['urgency_score', 'urgency_score'], ['importance_score', 'importance_score'],
     ['priority_tier', 'priority_tier'], ['priority_reasoning', 'priority_reasoning'],
     ['estimated_minutes', 'estimated_minutes'], ['energy_required', 'energy_required'],
+    ['recurrence_rule', 'recurrence_rule'], ['recurrence_end_date', 'recurrence_end_date'],
     ['position', 'position'],
   ];
 
@@ -800,6 +981,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:complete', withLogging('tasks:complete', (_, id: string) => completeTask(id)));
   ipcMain.handle('tasks:uncomplete', withLogging('tasks:uncomplete', (_, id: string) => uncompleteTask(id)));
   ipcMain.handle('tasks:reorder', withLogging('tasks:reorder', (_, listId: string, taskIds: string[]) => reorderTasks(listId, taskIds)));
+  ipcMain.handle('tasks:getByDateRange', withLogging('tasks:getByDateRange', (_, startDate: string, endDate: string) => getTasksByDateRange(startDate, endDate)));
+  ipcMain.handle('tasks:search', withLogging('tasks:search', (_, query: string, limit?: number) => searchTasks(query, limit)));
 
   // Goals
   ipcMain.handle('goals:getAll', withLogging('goals:getAll', () => getGoals()));

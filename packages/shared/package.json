@@ -1,5 +1,5 @@
 {
-  "name": "@foxintheloop/uptier-shared",
+  "name": "@uptier/shared",
   "version": "1.0.0",
   "description": "Shared types and constants for UpTier task management",
   "main": "./dist/index.js",

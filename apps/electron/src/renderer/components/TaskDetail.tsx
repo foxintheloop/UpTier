@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown } from 'lucide-react';
+import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown, Repeat } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -388,6 +388,9 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
             </div>
           )}
 
+          {/* Recurrence */}
+          <RecurrencePicker task={task} onUpdate={(input) => updateMutation.mutate(input)} />
+
           {/* Estimated Time */}
           {task.estimated_minutes && (
             <div className="flex items-center gap-2 text-sm">
@@ -653,6 +656,116 @@ function ScoreItem({ icon: Icon, label, value, description }: ScoreItemProps) {
         </div>
         {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// RecurrencePicker
+// ============================================================================
+
+const RECURRENCE_OPTIONS = [
+  { label: 'None', value: null },
+  { label: 'Daily', value: { frequency: 'daily' as const, interval: 1 } },
+  { label: 'Weekdays (Mon-Fri)', value: { frequency: 'weekdays' as const, interval: 1 } },
+  { label: 'Weekly', value: { frequency: 'weekly' as const, interval: 1 } },
+  { label: 'Every 2 Weeks', value: { frequency: 'weekly' as const, interval: 2 } },
+  { label: 'Monthly', value: { frequency: 'monthly' as const, interval: 1 } },
+];
+
+interface RecurrencePickerProps {
+  task: TaskWithGoals;
+  onUpdate: (input: UpdateTaskInput) => void;
+}
+
+function RecurrencePicker({ task, onUpdate }: RecurrencePickerProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [endDateInput, setEndDateInput] = useState(task.recurrence_end_date ?? '');
+
+  const currentRule = task.recurrence_rule
+    ? (() => { try { return JSON.parse(task.recurrence_rule); } catch { return null; } })()
+    : null;
+
+  const currentLabel = currentRule
+    ? RECURRENCE_OPTIONS.find(
+        (o) => o.value?.frequency === currentRule.frequency && o.value?.interval === currentRule.interval
+      )?.label ?? `Every ${currentRule.interval} ${currentRule.frequency}`
+    : 'None';
+
+  const handleSelectRecurrence = (option: typeof RECURRENCE_OPTIONS[number]) => {
+    if (option.value === null) {
+      onUpdate({ recurrence_rule: null, recurrence_end_date: null });
+    } else {
+      onUpdate({
+        recurrence_rule: JSON.stringify(option.value),
+        recurrence_end_date: endDateInput || null,
+      });
+    }
+    setIsOpen(false);
+  };
+
+  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setEndDateInput(value);
+    if (task.recurrence_rule) {
+      onUpdate({ recurrence_end_date: value || null });
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <button className="flex items-center gap-2 text-sm hover:bg-accent/50 rounded px-1 py-0.5 transition-colors">
+            <Repeat className="h-4 w-4 text-muted-foreground" />
+            <span>
+              {currentRule ? (
+                <>
+                  Repeats {currentLabel.toLowerCase()}
+                  {task.recurrence_end_date && (
+                    <span className="text-muted-foreground">
+                      {' '}until {format(parseISO(task.recurrence_end_date), 'MMM d, yyyy')}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-muted-foreground">Set recurrence...</span>
+              )}
+            </span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-56 p-1" align="start">
+          <div className="space-y-0.5">
+            {RECURRENCE_OPTIONS.map((option) => (
+              <button
+                key={option.label}
+                onClick={() => handleSelectRecurrence(option)}
+                className={cn(
+                  'w-full text-left px-3 py-1.5 text-sm rounded hover:bg-accent transition-colors',
+                  option.value?.frequency === currentRule?.frequency &&
+                    option.value?.interval === currentRule?.interval &&
+                    'bg-accent'
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* End date input - shown when recurrence is set */}
+      {currentRule && (
+        <div className="flex items-center gap-2 pl-6">
+          <label className="text-xs text-muted-foreground">Until:</label>
+          <input
+            type="date"
+            value={endDateInput}
+            onChange={handleEndDateChange}
+            className="text-xs bg-transparent border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      )}
     </div>
   );
 }

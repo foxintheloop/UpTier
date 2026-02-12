@@ -17,6 +17,13 @@ export type PrioritizationStrategy =
   | 'high_impact'
   | 'eisenhower';
 
+export type RecurrenceFrequency = 'daily' | 'weekdays' | 'weekly' | 'monthly';
+
+export interface RecurrenceRule {
+  frequency: RecurrenceFrequency;
+  interval: number;
+}
+
 // ============================================================================
 // Core Entities
 // ============================================================================
@@ -79,8 +86,9 @@ export interface Task {
   energy_required: EnergyLevel | null;
   context_tags: string | null; // JSON array: ["deep_work", "quick_win", "waiting_on"]
 
-  // Recurrence (future feature)
-  recurrence_rule: string | null; // RRULE format
+  // Recurrence
+  recurrence_rule: string | null; // JSON: { frequency, interval }
+  recurrence_end_date: string | null; // ISO date (YYYY-MM-DD)
 
   // Metadata
   created_at: string;
@@ -166,6 +174,8 @@ export interface CreateTaskInput {
   estimated_minutes?: number;
   energy_required?: EnergyLevel;
   context_tags?: string[];
+  recurrence_rule?: string;
+  recurrence_end_date?: string;
   goal_ids?: string[];
 }
 
@@ -184,6 +194,8 @@ export interface UpdateTaskInput {
   estimated_minutes?: number | null;
   energy_required?: EnergyLevel | null;
   context_tags?: string[] | null;
+  recurrence_rule?: string | null;
+  recurrence_end_date?: string | null;
   position?: number;
 }
 

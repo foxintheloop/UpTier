@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
     -- Recurrence
     recurrence_rule TEXT,
+    recurrence_end_date TEXT,
 
     -- Metadata
     created_at TEXT DEFAULT (datetime('now')),
