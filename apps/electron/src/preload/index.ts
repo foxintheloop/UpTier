@@ -33,7 +33,7 @@ interface NotificationSettings {
 }
 
 interface AppSettings {
-  theme: 'dark' | 'light' | 'system';
+  theme: 'dark' | 'light' | 'earth-dark' | 'earth-light' | 'cyberpunk' | 'system';
   notifications: NotificationSettings;
 }
 

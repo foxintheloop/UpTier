@@ -21,7 +21,7 @@ interface ActiveFocusSession {
   durationMinutes: number;
 }
 
-type ThemeMode = 'dark' | 'light' | 'system';
+type ThemeMode = 'dark' | 'light' | 'earth-dark' | 'earth-light' | 'cyberpunk' | 'system';
 
 const SIDEBAR_WIDTH_KEY = 'uptier-sidebar-width';
 const DEFAULT_SIDEBAR_WIDTH = 256;
@@ -29,15 +29,30 @@ const DEFAULT_SIDEBAR_WIDTH = 256;
 const DETAIL_WIDTH_KEY = 'uptier-detail-width';
 const DEFAULT_DETAIL_WIDTH = 384;
 
+// All theme CSS classes that may be applied to <html>
+const THEME_CLASSES = ['light', 'theme-earth-dark', 'theme-earth-light', 'theme-cyberpunk'] as const;
+
 // Apply theme to document
 function applyTheme(theme: ThemeMode) {
   const effectiveTheme = theme === 'system'
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
 
-  document.documentElement.classList.remove('light', 'dark');
-  if (effectiveTheme === 'light') {
-    document.documentElement.classList.add('light');
+  // Remove all theme classes first
+  document.documentElement.classList.remove(...THEME_CLASSES);
+
+  // Apply the appropriate class (dark = no class, uses :root defaults)
+  const themeClassMap: Record<string, string | null> = {
+    'dark': null,
+    'light': 'light',
+    'earth-dark': 'theme-earth-dark',
+    'earth-light': 'theme-earth-light',
+    'cyberpunk': 'theme-cyberpunk',
+  };
+
+  const cssClass = themeClassMap[effectiveTheme];
+  if (cssClass) {
+    document.documentElement.classList.add(cssClass);
   }
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sun, Moon, Monitor, ExternalLink, Bell, BellOff, Volume2, VolumeX, Download, Upload, FileJson, FileSpreadsheet, Check, AlertCircle } from 'lucide-react';
+import { Monitor, ExternalLink, Bell, BellOff, Volume2, VolumeX, Download, Upload, FileJson, FileSpreadsheet, Check, AlertCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 
-type ThemeMode = 'dark' | 'light' | 'system';
+type ThemeMode = 'dark' | 'light' | 'earth-dark' | 'earth-light' | 'cyberpunk' | 'system';
 
 interface NotificationSettings {
   enabled: boolean;
@@ -24,10 +24,78 @@ interface SettingsProps {
   onThemeChange: (theme: ThemeMode) => void;
 }
 
-const THEMES = [
-  { id: 'light' as const, label: 'Light', icon: Sun },
-  { id: 'dark' as const, label: 'Dark', icon: Moon },
-  { id: 'system' as const, label: 'System', icon: Monitor },
+interface ThemePreset {
+  id: ThemeMode;
+  label: string;
+  preview: {
+    bg: string;
+    fg: string;
+    primary: string;
+    border: string;
+  };
+}
+
+const THEMES: ThemePreset[] = [
+  {
+    id: 'dark',
+    label: 'Dark',
+    preview: {
+      bg: 'hsl(222.2, 84%, 4.9%)',
+      fg: 'hsl(210, 40%, 98%)',
+      primary: 'hsl(217.2, 91.2%, 59.8%)',
+      border: 'hsl(217.2, 32.6%, 17.5%)',
+    },
+  },
+  {
+    id: 'light',
+    label: 'Light',
+    preview: {
+      bg: 'hsl(0, 0%, 100%)',
+      fg: 'hsl(222.2, 84%, 4.9%)',
+      primary: 'hsl(217.2, 91.2%, 59.8%)',
+      border: 'hsl(214.3, 31.8%, 91.4%)',
+    },
+  },
+  {
+    id: 'earth-dark',
+    label: 'Earth Dark',
+    preview: {
+      bg: 'hsl(30, 15%, 7%)',
+      fg: 'hsl(40, 25%, 90%)',
+      primary: 'hsl(150, 25%, 40%)',
+      border: 'hsl(30, 10%, 18%)',
+    },
+  },
+  {
+    id: 'earth-light',
+    label: 'Earth Light',
+    preview: {
+      bg: 'hsl(40, 35%, 95%)',
+      fg: 'hsl(25, 40%, 15%)',
+      primary: 'hsl(150, 35%, 32%)',
+      border: 'hsl(35, 20%, 82%)',
+    },
+  },
+  {
+    id: 'cyberpunk',
+    label: 'Cyberpunk',
+    preview: {
+      bg: 'hsl(260, 50%, 5%)',
+      fg: 'hsl(185, 70%, 88%)',
+      primary: 'hsl(185, 100%, 50%)',
+      border: 'hsl(270, 35%, 16%)',
+    },
+  },
+  {
+    id: 'system',
+    label: 'System',
+    preview: {
+      bg: 'linear-gradient(135deg, hsl(222.2, 84%, 4.9%) 50%, hsl(0, 0%, 100%) 50%)',
+      fg: 'hsl(210, 40%, 98%)',
+      primary: 'hsl(217.2, 91.2%, 59.8%)',
+      border: 'hsl(217.2, 32.6%, 17.5%)',
+    },
+  },
 ];
 
 const REMINDER_OPTIONS = [
@@ -152,7 +220,7 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
@@ -162,19 +230,51 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
           <div className="space-y-3">
             <h4 className="text-sm font-medium">Appearance</h4>
             <div className="grid grid-cols-3 gap-2">
-              {THEMES.map(({ id, label, icon: Icon }) => (
+              {THEMES.map((theme) => (
                 <button
-                  key={id}
-                  onClick={() => handleThemeChange(id)}
+                  key={theme.id}
+                  onClick={() => handleThemeChange(theme.id)}
                   className={cn(
-                    'flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors',
-                    currentTheme === id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:bg-accent'
+                    'flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all',
+                    currentTheme === theme.id
+                      ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                      : 'border-border hover:bg-accent hover:border-accent-foreground/20'
                   )}
                 >
-                  <Icon className="h-5 w-5" />
-                  <span className="text-xs">{label}</span>
+                  {/* Theme preview swatch */}
+                  <div
+                    className="w-full aspect-[4/3] rounded-md overflow-hidden border relative"
+                    style={{
+                      background: theme.preview.bg,
+                      borderColor: theme.preview.border,
+                    }}
+                  >
+                    <div className="flex flex-col justify-end h-full p-1.5">
+                      {/* Mini UI mockup */}
+                      <div className="flex items-center gap-1">
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: theme.preview.primary }}
+                        />
+                        <div
+                          className="h-1 rounded-full flex-1"
+                          style={{ backgroundColor: theme.preview.fg, opacity: 0.3 }}
+                        />
+                      </div>
+                      <div
+                        className="h-1 rounded-full w-3/4 mt-1"
+                        style={{ backgroundColor: theme.preview.fg, opacity: 0.15 }}
+                      />
+                    </div>
+                    {/* System theme: show monitor icon overlay */}
+                    {theme.id === 'system' && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Monitor className="h-5 w-5" style={{ color: theme.preview.fg }} />
+                      </div>
+                    )}
+                  </div>
+                  {/* Theme label */}
+                  <span className="text-[11px] font-medium leading-tight">{theme.label}</span>
                 </button>
               ))}
             </div>

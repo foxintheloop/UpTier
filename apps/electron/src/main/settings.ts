@@ -4,7 +4,7 @@ import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { DB_FILENAME, DB_DIRECTORY } from '@uptier/shared';
 
-export type ThemeMode = 'dark' | 'light' | 'system';
+export type ThemeMode = 'dark' | 'light' | 'earth-dark' | 'earth-light' | 'cyberpunk' | 'system';
 
 export interface NotificationSettings {
   enabled: boolean;
@@ -100,7 +100,7 @@ export function setTheme(theme: ThemeMode): void {
 /**
  * Get the effective theme (resolves 'system' to actual theme)
  */
-export function getEffectiveTheme(): 'dark' | 'light' {
+export function getEffectiveTheme(): Exclude<ThemeMode, 'system'> {
   const theme = getTheme();
   if (theme === 'system') {
     return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
