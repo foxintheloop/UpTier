@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, Calendar, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown, Repeat } from 'lucide-react';
+import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown, Repeat } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -19,7 +19,8 @@ const FOCUS_DURATIONS = [
   { value: 90, label: '90 min' },
 ];
 import { PRIORITY_SCALES, PRIORITY_TIERS } from '@uptier/shared';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addDays, addWeeks, addMonths, isPast, isToday, startOfDay } from 'date-fns';
+import { Calendar } from './ui/calendar';
 
 // Helper to parse UTC timestamps from database (stored without 'Z' indicator)
 const parseUTCTimestamp = (timestamp: string) => parseISO(timestamp.replace(' ', 'T') + 'Z');
@@ -380,13 +381,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
           )}
 
           {/* Due Date */}
-          {task.due_date && (
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>Due {format(parseISO(task.due_date), 'MMMM d, yyyy')}</span>
-              {task.due_time && <span>at {task.due_time}</span>}
-            </div>
-          )}
+          <DueDatePicker task={task} onUpdate={(input) => updateMutation.mutate(input)} />
 
           {/* Recurrence */}
           <RecurrencePicker task={task} onUpdate={(input) => updateMutation.mutate(input)} />
@@ -766,6 +761,154 @@ function RecurrencePicker({ task, onUpdate }: RecurrencePickerProps) {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// DueDatePicker
+// ============================================================================
+
+const DUE_DATE_PRESETS = [
+  { label: 'Today', getValue: () => format(new Date(), 'yyyy-MM-dd') },
+  { label: 'Tomorrow', getValue: () => format(addDays(new Date(), 1), 'yyyy-MM-dd') },
+  { label: 'Next Week', getValue: () => format(addWeeks(startOfDay(new Date()), 1), 'yyyy-MM-dd') },
+  { label: 'Next Month', getValue: () => format(addMonths(startOfDay(new Date()), 1), 'yyyy-MM-dd') },
+];
+
+interface DueDatePickerProps {
+  task: TaskWithGoals;
+  onUpdate: (input: UpdateTaskInput) => void;
+}
+
+function DueDatePicker({ task, onUpdate }: DueDatePickerProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [timeInput, setTimeInput] = useState(task.due_time ?? '');
+
+  const isOverdue =
+    task.due_date &&
+    isPast(parseISO(task.due_date)) &&
+    !isToday(parseISO(task.due_date)) &&
+    !task.completed;
+
+  const displayLabel = (() => {
+    if (!task.due_date) return null;
+    const date = parseISO(task.due_date);
+    if (isToday(date)) return 'Today';
+    const tomorrow = addDays(startOfDay(new Date()), 1);
+    if (format(date, 'yyyy-MM-dd') === format(tomorrow, 'yyyy-MM-dd')) return 'Tomorrow';
+    return format(date, 'MMMM d, yyyy');
+  })();
+
+  const handleSelectPreset = (dateStr: string) => {
+    onUpdate({ due_date: dateStr });
+  };
+
+  const handleSelectCalendarDate = (date: Date | undefined) => {
+    if (date) {
+      onUpdate({ due_date: format(date, 'yyyy-MM-dd') });
+    }
+  };
+
+  const handleClear = () => {
+    onUpdate({ due_date: null, due_time: null });
+    setTimeInput('');
+    setIsOpen(false);
+  };
+
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setTimeInput(value);
+    onUpdate({ due_time: value || null });
+  };
+
+  useEffect(() => {
+    setTimeInput(task.due_time ?? '');
+  }, [task.due_time]);
+
+  const selectedDate = task.due_date ? parseISO(task.due_date) : undefined;
+
+  return (
+    <div className="space-y-2">
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <button
+            className={cn(
+              'flex items-center gap-2 text-sm hover:bg-accent/50 rounded px-1 py-0.5 transition-colors',
+              isOverdue && 'text-red-400'
+            )}
+          >
+            <CalendarIcon
+              className={cn('h-4 w-4', isOverdue ? 'text-red-400' : 'text-muted-foreground')}
+            />
+            <span>
+              {displayLabel ? (
+                <>
+                  Due {displayLabel}
+                  {task.due_time && (
+                    <span className="text-muted-foreground"> at {task.due_time}</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-muted-foreground">Set due date...</span>
+              )}
+            </span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <div className="flex">
+            {/* Left side: Presets + time */}
+            <div className="border-r border-border p-2 space-y-0.5">
+              {DUE_DATE_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => handleSelectPreset(preset.getValue())}
+                  className={cn(
+                    'w-full text-left px-3 py-1.5 text-sm rounded hover:bg-accent transition-colors whitespace-nowrap',
+                    task.due_date === preset.getValue() && 'bg-accent'
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+
+              <div className="border-t border-border my-1" />
+
+              <button
+                onClick={handleClear}
+                className="w-full text-left px-3 py-1.5 text-sm rounded hover:bg-accent transition-colors text-muted-foreground"
+              >
+                No due date
+              </button>
+
+              {task.due_date && (
+                <>
+                  <div className="border-t border-border my-1" />
+                  <div className="px-3 py-1.5 space-y-1">
+                    <label className="text-xs text-muted-foreground">Time</label>
+                    <input
+                      type="time"
+                      value={timeInput}
+                      onChange={handleTimeChange}
+                      className="w-full text-sm bg-transparent border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Right side: Calendar */}
+            <div className="p-2">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={handleSelectCalendarDate}
+                initialFocus
+              />
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
