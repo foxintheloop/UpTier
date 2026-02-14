@@ -25,7 +25,10 @@ Pre-built installer available. No build required.
 - **Smart Lists** - Built-in views for My Day, Important, Planned, and Completed tasks
 - **Tags** - Categorize tasks with colored tags for easy filtering
 - **Due Dates** - Set due dates with notifications and overdue tracking
-- **Drag & Drop** - Reorder tasks within lists
+- **Recurring Tasks** - Daily, weekday, weekly, biweekly, and monthly recurrence with optional end dates
+- **Day Planner** - Time-blocking calendar view with hourly grid, drag-and-drop scheduling, and block resizing
+- **Task Duration** - Set estimated duration for tasks to size time blocks on the calendar
+- **Drag & Drop** - Reorder tasks within lists and schedule tasks onto the calendar
 
 ### AI-Powered Features
 - **Intelligent Prioritization** - Let Claude analyze and prioritize your tasks
@@ -51,6 +54,7 @@ Pre-built installer available. No build required.
 
 ### User Experience
 - **Dark Mode** - Modern dark theme interface
+- **Command Palette** - Global search and navigation with Ctrl+K
 - **Keyboard Shortcuts** - Quick actions with Ctrl+F (search), Ctrl+N (new task)
 - **System Tray** - Minimize to tray for quick access
 - **Concurrent Access** - SQLite with WAL mode lets both the app and Claude work simultaneously
@@ -246,6 +250,7 @@ Application logs are stored at:
 
 | Shortcut | Action |
 |----------|--------|
+| `Ctrl+K` | Open command palette |
 | `Ctrl+N` | Create new task |
 | `Ctrl+F` | Focus search |
 | `↑` / `↓` | Navigate tasks |
@@ -272,7 +277,7 @@ Application logs are stored at:
 - [x] List rename/delete
 - [x] Focus timer
 - [x] Resizable panels
-- [ ] Recurring tasks
+- [x] Recurring tasks
 - [ ] Custom smart list filters
 - [ ] Calendar integration
 - [ ] Task templates
