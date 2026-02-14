@@ -54,7 +54,7 @@ Pre-built installer available. No build required.
 - **Keyboard Controls** - Space to pause/resume, Esc to end session
 
 ### User Experience
-- **Dark Mode** - Modern dark theme interface
+- **Themes** - Dark, Light, Earth Dark, Earth Light, and Cyberpunk themes
 - **Command Palette** - Global search and navigation with Ctrl+K
 - **Keyboard Shortcuts** - Quick actions with Ctrl+F (search), Ctrl+N (new task)
 - **System Tray** - Minimize to tray for quick access
@@ -269,7 +269,7 @@ Application logs are stored at:
 ## Roadmap
 
 - [x] Smart lists (My Day, Important, Planned, Completed)
-- [x] Dark mode
+- [x] Themes (Dark, Light, Earth, Cyberpunk)
 - [x] Keyboard shortcuts
 - [x] Tags
 - [x] Due date notifications
