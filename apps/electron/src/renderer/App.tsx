@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from './components/Sidebar';
 import { TaskList } from './components/TaskList';
 import type { TaskListHandle } from './components/TaskList';
@@ -10,7 +10,7 @@ import { Settings } from './components/Settings';
 import { CommandPalette } from './components/CommandPalette';
 import { FocusTimerOverlay } from './components/FocusTimerOverlay';
 import { Toaster } from './components/ui/toaster';
-import type { TaskWithGoals, GoalWithProgress, Task } from '@uptier/shared';
+import type { TaskWithGoals, GoalWithProgress, Task, List } from '@uptier/shared';
 
 // Default focus duration in minutes
 const DEFAULT_FOCUS_DURATION = 90;
@@ -60,6 +60,13 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
+
+  // Fetch custom smart lists to detect filter views
+  const { data: customSmartLists = [] } = useQuery<List[]>({
+    queryKey: ['smartLists'],
+    queryFn: () => window.electronAPI.smartLists.getAll(),
+  });
+  const isCustomSmartList = customSmartLists.some((l) => l.id === selectedListId);
 
   // Save sidebar width to localStorage when it changes
   const handleSidebarWidthChange = useCallback((width: number) => {
@@ -119,6 +126,7 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
       queryClient.invalidateQueries({ queryKey: ['subtasks'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
+      queryClient.invalidateQueries({ queryKey: ['smartLists'] });
       queryClient.invalidateQueries({ queryKey: ['database-profiles'] });
       queryClient.invalidateQueries({ queryKey: ['database-active'] });
     });
@@ -318,6 +326,7 @@ export default function App() {
                 setSelectedGoal(null);
               }}
               onStartFocus={(task) => handleStartFocus(task, DEFAULT_FOCUS_DURATION)}
+              isFilterList={isCustomSmartList}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">

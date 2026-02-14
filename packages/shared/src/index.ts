@@ -37,8 +37,13 @@ export type {
   GoalWithProgress,
   GoalWithChildren,
   PrioritizationSummary,
-  // Smart List Types
-  SmartListFilter,
+  // Smart List Filter Types
+  SmartFilterField,
+  SmartFilterOperator,
+  SmartFilterRule,
+  SmartFilterCriteria,
+  CreateSmartListInput,
+  UpdateSmartListInput,
   // Focus Session Types
   FocusSession,
   StartFocusSessionInput,

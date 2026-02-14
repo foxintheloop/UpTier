@@ -21,12 +21,22 @@ import {
   PanelLeftClose,
   PanelLeft,
   Search,
+  Filter,
+  Zap,
+  Flame,
+  Clock,
+  Flag,
+  Tag,
+  Inbox,
+  Archive,
+  Eye,
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { cn } from '@/lib/utils';
-import type { ListWithCount, GoalWithProgress, Timeframe } from '@uptier/shared';
+import { SmartListEditor } from './SmartListEditor';
+import type { ListWithCount, GoalWithProgress, Timeframe, List as ListType } from '@uptier/shared';
 
 interface DatabaseProfile {
   id: string;
@@ -63,6 +73,23 @@ const SMART_LISTS = [
   { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 
+const FILTER_ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+  filter: Filter,
+  zap: Zap,
+  flame: Flame,
+  clock: Clock,
+  flag: Flag,
+  tag: Tag,
+  inbox: Inbox,
+  archive: Archive,
+  eye: Eye,
+  star: Star,
+};
+
+function getFilterIcon(iconName: string) {
+  return FILTER_ICON_MAP[iconName] ?? Filter;
+}
+
 const TIMEFRAME_COLORS: Record<Timeframe, string> = {
   daily: 'text-emerald-400',
   weekly: 'text-blue-400',
@@ -86,12 +113,21 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
   const [showNewGoal, setShowNewGoal] = useState(false);
   const [newGoalName, setNewGoalName] = useState('');
   const [newGoalTimeframe, setNewGoalTimeframe] = useState<Timeframe>('weekly');
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [filterEditorOpen, setFilterEditorOpen] = useState(false);
+  const [editingFilter, setEditingFilter] = useState<ListType | null>(null);
+  const [filterMenuOpen, setFilterMenuOpen] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
   const { data: lists = [] } = useQuery<ListWithCount[]>({
     queryKey: ['lists'],
     queryFn: () => window.electronAPI.lists.getAll(),
+  });
+
+  const { data: customSmartLists = [] } = useQuery<ListType[]>({
+    queryKey: ['smartLists'],
+    queryFn: () => window.electronAPI.smartLists.getAll(),
   });
 
   const { data: dbProfiles = [] } = useQuery<DatabaseProfile[]>({
@@ -181,6 +217,35 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
     },
   });
 
+  const deleteSmartListMutation = useMutation({
+    mutationFn: (id: string) => window.electronAPI.smartLists.delete(id),
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ['smartLists'] });
+      if (selectedListId === deletedId) {
+        onSelectList('smart:my_day');
+      }
+    },
+  });
+
+  const handleDeleteSmartList = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setFilterMenuOpen(null);
+    if (window.confirm('Delete this filter?')) {
+      deleteSmartListMutation.mutate(id);
+    }
+  };
+
+  const handleEditSmartList = (list: ListType) => {
+    setFilterMenuOpen(null);
+    setEditingFilter(list);
+    setFilterEditorOpen(true);
+  };
+
+  const handleCreateFilter = () => {
+    setEditingFilter(null);
+    setFilterEditorOpen(true);
+  };
+
   const handleCreateList = () => {
     if (newListName.trim()) {
       createListMutation.mutate(newListName.trim());
@@ -256,12 +321,15 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
       if (!target.closest('.list-menu')) {
         setListMenuOpen(null);
       }
+      if (!target.closest('.filter-menu')) {
+        setFilterMenuOpen(null);
+      }
     };
-    if (listMenuOpen) {
+    if (listMenuOpen || filterMenuOpen) {
       document.addEventListener('click', handleClickOutside);
     }
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [listMenuOpen]);
+  }, [listMenuOpen, filterMenuOpen]);
 
   // Handle sidebar resize
   useEffect(() => {
@@ -462,6 +530,117 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
               </button>
             ))}
           </div>
+
+          {/* Custom Smart Lists (Filters) */}
+          {(customSmartLists.length > 0 || !collapsed) && (
+            <>
+              <div className="border-t border-border my-2" />
+              <div className="mb-4">
+                {!collapsed && (
+                  <button
+                    onClick={() => setFiltersExpanded(!filtersExpanded)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    {filtersExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <Filter className="h-4 w-4" />
+                    <span>Filters</span>
+                    {customSmartLists.length > 0 && (
+                      <span className="ml-auto text-xs">{customSmartLists.length}</span>
+                    )}
+                  </button>
+                )}
+
+                {(collapsed || filtersExpanded) && (
+                  <div className={cn(!collapsed && "ml-2")}>
+                    {customSmartLists.map((smartList) => {
+                      const IconComp = getFilterIcon(smartList.icon);
+                      return (
+                        <div key={smartList.id} className="group relative filter-menu">
+                          <div
+                            onClick={() => onSelectList(smartList.id)}
+                            className={cn(
+                              'w-full flex items-center rounded-md text-sm transition-colors cursor-pointer',
+                              collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
+                              selectedListId === smartList.id
+                                ? 'bg-accent text-accent-foreground'
+                                : 'hover:bg-accent/50 text-muted-foreground'
+                            )}
+                            title={collapsed ? smartList.name : undefined}
+                          >
+                            <IconComp
+                              className="h-4 w-4 flex-shrink-0"
+                              style={{ color: smartList.color }}
+                            />
+                            {!collapsed && (
+                              <>
+                                <span className="flex-1 text-left truncate">{smartList.name}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFilterMenuOpen(filterMenuOpen === smartList.id ? null : smartList.id);
+                                  }}
+                                  className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+                                >
+                                  <MoreVertical className="h-3.5 w-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Filter context menu */}
+                          {filterMenuOpen === smartList.id && (
+                            <div className="absolute right-2 top-full mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden min-w-[120px]">
+                              <button
+                                onClick={() => handleEditSmartList(smartList)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent transition-colors"
+                              >
+                                <Pencil className="h-3 w-3" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={(e) => handleDeleteSmartList(e, smartList.id)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent text-destructive transition-colors"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* New Filter button */}
+                    {!collapsed && (
+                      <button
+                        onClick={handleCreateFilter}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span>New Filter</span>
+                      </button>
+                    )}
+                    {collapsed && (
+                      <button
+                        onClick={() => {
+                          if (onToggleCollapse) onToggleCollapse();
+                          handleCreateFilter();
+                        }}
+                        className="w-full flex items-center justify-center p-2 rounded-md text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                        title="New Filter"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* Separator */}
           <div className="border-t border-border my-2" />
@@ -767,6 +946,16 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
           {!collapsed && "Settings"}
         </Button>
       </div>
+
+      {/* Smart List Editor Dialog */}
+      <SmartListEditor
+        open={filterEditorOpen}
+        onOpenChange={setFilterEditorOpen}
+        editingList={editingFilter}
+        onSaved={() => {
+          setEditingFilter(null);
+        }}
+      />
     </div>
   );
 }

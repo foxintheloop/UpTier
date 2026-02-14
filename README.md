@@ -23,6 +23,7 @@ Pre-built installer available. No build required.
 ### Task Management
 - **Lists & Tasks** - Create custom lists, tasks with subtasks, and organize your work
 - **Smart Lists** - Built-in views for My Day, Important, Planned, and Completed tasks
+- **Custom Filters** - Create your own smart lists with visual filter rules (due date, priority, tags, energy, and more)
 - **Tags** - Categorize tasks with colored tags for easy filtering
 - **Due Dates** - Set due dates with notifications and overdue tracking
 - **Recurring Tasks** - Daily, weekday, weekly, biweekly, and monthly recurrence with optional end dates
@@ -278,7 +279,7 @@ Application logs are stored at:
 - [x] Focus timer
 - [x] Resizable panels
 - [x] Recurring tasks
-- [ ] Custom smart list filters
+- [x] Custom smart list filters
 - [ ] Calendar integration
 - [ ] Task templates
 - [ ] Mobile companion app

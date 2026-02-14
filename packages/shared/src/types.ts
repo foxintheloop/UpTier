@@ -305,14 +305,32 @@ export interface PrioritizationSummary {
 // Smart List Filter Types
 // ============================================================================
 
-export interface SmartListFilter {
-  type: 'my_day' | 'important' | 'planned' | 'all';
-  criteria?: {
-    due_today?: boolean;
-    priority_tier?: PriorityTier;
-    has_due_date?: boolean;
-    is_overdue?: boolean;
-  };
+export type SmartFilterField = 'due_date' | 'priority_tier' | 'tags' | 'energy_required' | 'list_id' | 'estimated_minutes' | 'completed';
+
+export type SmartFilterOperator = 'equals' | 'not_equals' | 'in' | 'not_in' | 'is_set' | 'is_not_set' | 'today' | 'this_week' | 'overdue' | 'gte' | 'lte';
+
+export interface SmartFilterRule {
+  field: SmartFilterField;
+  operator: SmartFilterOperator;
+  value?: string | number | string[] | boolean;
+}
+
+export interface SmartFilterCriteria {
+  rules: SmartFilterRule[];
+}
+
+export interface CreateSmartListInput {
+  name: string;
+  icon?: string;
+  color?: string;
+  filter: SmartFilterCriteria;
+}
+
+export interface UpdateSmartListInput {
+  name?: string;
+  icon?: string;
+  color?: string;
+  filter?: SmartFilterCriteria;
 }
 
 // ============================================================================

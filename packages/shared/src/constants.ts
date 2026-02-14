@@ -1,4 +1,15 @@
-import type { PrioritizationStrategy, SmartListFilter } from './types.js';
+import type { PrioritizationStrategy } from './types.js';
+
+// Legacy type for built-in smart list definitions (kept for DEFAULT_SMART_LISTS)
+interface BuiltInSmartListFilter {
+  type: 'my_day' | 'important' | 'planned' | 'all';
+  criteria?: {
+    due_today?: boolean;
+    priority_tier?: number;
+    has_due_date?: boolean;
+    is_overdue?: boolean;
+  };
+}
 
 // ============================================================================
 // Database Constants
@@ -113,7 +124,7 @@ export const DEFAULT_SMART_LISTS: Array<{
   name: string;
   icon: string;
   color: string;
-  filter: SmartListFilter;
+  filter: BuiltInSmartListFilter;
 }> = [
   {
     id: 'smart-my-day',

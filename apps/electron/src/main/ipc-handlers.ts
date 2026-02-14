@@ -52,9 +52,12 @@ import type {
   UpdateTagInput,
   GetTasksOptions,
   StartFocusSessionInput,
+  SmartFilterCriteria,
+  CreateSmartListInput,
+  UpdateSmartListInput,
 } from '@uptier/shared';
 import { DEFAULT_LIST_ICON, DEFAULT_LIST_COLOR } from '@uptier/shared';
-import { addDays, addWeeks, addMonths, parseISO, format, getDay } from 'date-fns';
+import { addDays, addWeeks, addMonths, parseISO, format, getDay, startOfWeek, endOfWeek } from 'date-fns';
 
 // Local type to avoid build-order dependency on shared package
 interface RecurrenceRule {
@@ -427,9 +430,18 @@ function searchTasks(query: string, limit: number = 20): TaskWithGoals[] {
 function getTasks(options: GetTasksOptions = {}): TaskWithGoals[] {
   const db = getDb();
 
-  // Handle smart list IDs
+  // Handle built-in smart list IDs (smart:my_day, smart:important, etc.)
   if (isSmartListId(options.list_id)) {
     return getSmartListTasks(options.list_id!);
+  }
+
+  // Handle custom smart lists (is_smart_list = 1 with smart_filter JSON)
+  if (options.list_id) {
+    const listRow = db.prepare('SELECT is_smart_list, smart_filter FROM lists WHERE id = ?')
+      .get(options.list_id) as { is_smart_list: number; smart_filter: string | null } | undefined;
+    if (listRow?.is_smart_list && listRow.smart_filter) {
+      return getCustomSmartListTasks(JSON.parse(listRow.smart_filter) as SmartFilterCriteria);
+    }
   }
 
   const conditions: string[] = [];
@@ -961,6 +973,236 @@ function getTaskTags(taskId: string): Tag[] {
 }
 
 // ============================================================================
+// Custom Smart Lists (Filters)
+// ============================================================================
+
+function getCustomSmartLists(): List[] {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM lists WHERE is_smart_list = 1 ORDER BY position ASC').all() as List[];
+  return rows.map((row) => ({
+    ...row,
+    is_smart_list: Boolean(row.is_smart_list),
+  }));
+}
+
+function createSmartList(input: CreateSmartListInput): List {
+  const db = getDb();
+  const id = generateId();
+  const now = nowISO();
+
+  ipcLog.debug('Creating smart list', { name: input.name });
+
+  const maxPos = db.prepare('SELECT MAX(position) as max FROM lists WHERE is_smart_list = 1').get() as { max: number | null };
+  const position = (maxPos.max ?? -1) + 1;
+
+  db.prepare(`
+    INSERT INTO lists (id, name, description, icon, color, position, is_smart_list, smart_filter, created_at, updated_at)
+    VALUES (?, ?, NULL, ?, ?, ?, 1, ?, ?, ?)
+  `).run(
+    id,
+    input.name,
+    input.icon ?? 'filter',
+    input.color ?? '#6366f1',
+    position,
+    JSON.stringify(input.filter),
+    now,
+    now
+  );
+
+  ipcLog.info('Smart list created', { id, name: input.name });
+  const row = db.prepare('SELECT * FROM lists WHERE id = ?').get(id) as List;
+  return { ...row, is_smart_list: Boolean(row.is_smart_list) };
+}
+
+function updateSmartList(id: string, input: UpdateSmartListInput): List | null {
+  const db = getDb();
+  const updates: string[] = [];
+  const values: unknown[] = [];
+
+  if (input.name !== undefined) { updates.push('name = ?'); values.push(input.name); }
+  if (input.icon !== undefined) { updates.push('icon = ?'); values.push(input.icon); }
+  if (input.color !== undefined) { updates.push('color = ?'); values.push(input.color); }
+  if (input.filter !== undefined) { updates.push('smart_filter = ?'); values.push(JSON.stringify(input.filter)); }
+
+  if (updates.length === 0) {
+    const row = db.prepare('SELECT * FROM lists WHERE id = ? AND is_smart_list = 1').get(id) as List | undefined;
+    return row ? { ...row, is_smart_list: Boolean(row.is_smart_list) } : null;
+  }
+
+  ipcLog.debug('Updating smart list', { id, fields: updates.length });
+
+  values.push(id);
+  db.prepare(`UPDATE lists SET ${updates.join(', ')} WHERE id = ? AND is_smart_list = 1`).run(...values);
+
+  ipcLog.info('Smart list updated', { id });
+  const row = db.prepare('SELECT * FROM lists WHERE id = ?').get(id) as List | undefined;
+  return row ? { ...row, is_smart_list: Boolean(row.is_smart_list) } : null;
+}
+
+function deleteSmartList(id: string): boolean {
+  const db = getDb();
+  ipcLog.debug('Deleting smart list', { id });
+
+  const result = db.prepare('DELETE FROM lists WHERE id = ? AND is_smart_list = 1').run(id);
+  const success = result.changes > 0;
+
+  if (success) {
+    ipcLog.info('Smart list deleted', { id });
+  } else {
+    ipcLog.warn('Smart list not deleted (not found or not a smart list)', { id });
+  }
+
+  return success;
+}
+
+function buildSmartFilterQuery(filter: SmartFilterCriteria): { whereClause: string; params: unknown[] } {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  for (const rule of filter.rules) {
+    switch (rule.field) {
+      case 'due_date':
+        switch (rule.operator) {
+          case 'today':
+            conditions.push('t.due_date = ?');
+            params.push(today);
+            break;
+          case 'this_week': {
+            const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+            const weekEnd = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+            conditions.push('t.due_date BETWEEN ? AND ?');
+            params.push(weekStart, weekEnd);
+            break;
+          }
+          case 'overdue':
+            conditions.push('t.due_date < ? AND t.completed = 0');
+            params.push(today);
+            break;
+          case 'is_set':
+            conditions.push('t.due_date IS NOT NULL');
+            break;
+          case 'is_not_set':
+            conditions.push('t.due_date IS NULL');
+            break;
+        }
+        break;
+
+      case 'priority_tier':
+        if (rule.operator === 'equals') {
+          conditions.push('t.priority_tier = ?');
+          params.push(rule.value);
+        } else if (rule.operator === 'in' && Array.isArray(rule.value)) {
+          const placeholders = rule.value.map(() => '?').join(', ');
+          conditions.push(`t.priority_tier IN (${placeholders})`);
+          params.push(...rule.value);
+        } else if (rule.operator === 'is_set') {
+          conditions.push('t.priority_tier IS NOT NULL');
+        } else if (rule.operator === 'is_not_set') {
+          conditions.push('t.priority_tier IS NULL');
+        }
+        break;
+
+      case 'completed':
+        if (rule.operator === 'equals') {
+          conditions.push('t.completed = ?');
+          params.push(rule.value ? 1 : 0);
+        }
+        break;
+
+      case 'tags':
+        if (rule.operator === 'in' && Array.isArray(rule.value)) {
+          const placeholders = rule.value.map(() => '?').join(', ');
+          conditions.push(`EXISTS (SELECT 1 FROM task_tags tt WHERE tt.task_id = t.id AND tt.tag_id IN (${placeholders}))`);
+          params.push(...rule.value);
+        }
+        break;
+
+      case 'energy_required':
+        if (rule.operator === 'equals') {
+          conditions.push('t.energy_required = ?');
+          params.push(rule.value);
+        } else if (rule.operator === 'in' && Array.isArray(rule.value)) {
+          const placeholders = rule.value.map(() => '?').join(', ');
+          conditions.push(`t.energy_required IN (${placeholders})`);
+          params.push(...rule.value);
+        }
+        break;
+
+      case 'list_id':
+        if (rule.operator === 'in' && Array.isArray(rule.value)) {
+          const placeholders = rule.value.map(() => '?').join(', ');
+          conditions.push(`t.list_id IN (${placeholders})`);
+          params.push(...rule.value);
+        }
+        break;
+
+      case 'estimated_minutes':
+        if (rule.operator === 'is_set') {
+          conditions.push('t.estimated_minutes IS NOT NULL');
+        } else if (rule.operator === 'is_not_set') {
+          conditions.push('t.estimated_minutes IS NULL');
+        } else if (rule.operator === 'lte') {
+          conditions.push('t.estimated_minutes <= ?');
+          params.push(rule.value);
+        } else if (rule.operator === 'gte') {
+          conditions.push('t.estimated_minutes >= ?');
+          params.push(rule.value);
+        }
+        break;
+    }
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  return { whereClause, params };
+}
+
+function getCustomSmartListTasks(filter: SmartFilterCriteria): TaskWithGoals[] {
+  const db = getDb();
+  const { whereClause, params } = buildSmartFilterQuery(filter);
+
+  const tasks = db.prepare(`
+    SELECT t.* FROM tasks t
+    ${whereClause}
+    ORDER BY t.priority_tier ASC NULLS LAST, t.due_date ASC NULLS LAST, t.position ASC
+  `).all(...params) as Task[];
+
+  const goalQuery = db.prepare(`
+    SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
+    FROM task_goals tg
+    JOIN goals g ON g.id = tg.goal_id
+    WHERE tg.task_id = ?
+  `);
+
+  const tagQuery = db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM tags t
+    JOIN task_tags tt ON tt.tag_id = t.id
+    WHERE tt.task_id = ?
+  `);
+
+  return tasks.map((task) => {
+    const goals = goalQuery.all(task.id) as Array<{
+      goal_id: string;
+      goal_name: string;
+      alignment_strength: number;
+    }>;
+    const tags = tagQuery.all(task.id) as Tag[];
+
+    return {
+      ...task,
+      completed: Boolean(task.completed),
+      goals: goals.map((g) => ({
+        goal_id: g.goal_id,
+        goal_name: g.goal_name,
+        alignment_strength: g.alignment_strength,
+      })),
+      tags,
+    };
+  });
+}
+
+// ============================================================================
 // Register IPC Handlers
 // ============================================================================
 
@@ -972,6 +1214,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('lists:create', withLogging('lists:create', (_, input: CreateListInput) => createList(input)));
   ipcMain.handle('lists:update', withLogging('lists:update', (_, id: string, input: UpdateListInput) => updateList(id, input)));
   ipcMain.handle('lists:delete', withLogging('lists:delete', (_, id: string) => deleteList(id)));
+
+  // Smart Lists (Custom Filters)
+  ipcMain.handle('smartLists:getAll', withLogging('smartLists:getAll', () => getCustomSmartLists()));
+  ipcMain.handle('smartLists:create', withLogging('smartLists:create', (_, input: CreateSmartListInput) => createSmartList(input)));
+  ipcMain.handle('smartLists:update', withLogging('smartLists:update', (_, id: string, input: UpdateSmartListInput) => updateSmartList(id, input)));
+  ipcMain.handle('smartLists:delete', withLogging('smartLists:delete', (_, id: string) => deleteSmartList(id)));
 
   // Tasks
   ipcMain.handle('tasks:getByList', withLogging('tasks:getByList', (_, options: GetTasksOptions) => getTasks(options)));

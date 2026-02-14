@@ -20,6 +20,8 @@ import type {
   FocusSession,
   FocusSessionWithTask,
   StartFocusSessionInput,
+  CreateSmartListInput,
+  UpdateSmartListInput,
 } from '@uptier/shared';
 
 // Types for settings and notifications
@@ -147,6 +149,14 @@ const electronAPI = {
     create: (input: CreateListInput): Promise<List> => ipcRenderer.invoke('lists:create', input),
     update: (id: string, input: UpdateListInput): Promise<List | null> => ipcRenderer.invoke('lists:update', id, input),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('lists:delete', id),
+  },
+
+  // Smart Lists (Custom Filters)
+  smartLists: {
+    getAll: (): Promise<List[]> => ipcRenderer.invoke('smartLists:getAll'),
+    create: (input: CreateSmartListInput): Promise<List> => ipcRenderer.invoke('smartLists:create', input),
+    update: (id: string, input: UpdateSmartListInput): Promise<List | null> => ipcRenderer.invoke('smartLists:update', id, input),
+    delete: (id: string): Promise<boolean> => ipcRenderer.invoke('smartLists:delete', id),
   },
 
   // Tasks

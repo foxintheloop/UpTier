@@ -28,6 +28,7 @@ interface TaskListProps {
   selectedTaskId?: string;
   onSelectTask: (task: TaskWithGoals | null) => void;
   onStartFocus?: (task: TaskWithGoals) => void;
+  isFilterList?: boolean;
 }
 
 export interface TaskListHandle {
@@ -48,14 +49,14 @@ const SMART_LIST_EMPTY_STATES: Record<string, { title: string; subtitle: string 
 };
 
 export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskList(
-  { listId, selectedTaskId, onSelectTask, onStartFocus },
+  { listId, selectedTaskId, onSelectTask, onStartFocus, isFilterList },
   ref
 ) {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const quickAddRef = useRef<QuickAddHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const isSmartListView = isSmartList(listId);
+  const isSmartListView = isSmartList(listId) || !!isFilterList;
 
   const { data: tasks = [], isLoading } = useQuery<TaskWithGoals[]>({
     queryKey: ['tasks', listId],
