@@ -386,18 +386,8 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
           {/* Recurrence */}
           <RecurrencePicker task={task} onUpdate={(input) => updateMutation.mutate(input)} />
 
-          {/* Estimated Time */}
-          {task.estimated_minutes && (
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span>
-                Estimated:{' '}
-                {task.estimated_minutes >= 60
-                  ? `${Math.floor(task.estimated_minutes / 60)}h ${task.estimated_minutes % 60}m`
-                  : `${task.estimated_minutes}m`}
-              </span>
-            </div>
-          )}
+          {/* Duration */}
+          <DurationPicker task={task} onUpdate={(input) => updateMutation.mutate(input)} />
 
           {/* Goals */}
           <div className="space-y-2">
@@ -910,5 +900,124 @@ function DueDatePicker({ task, onUpdate }: DueDatePickerProps) {
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+// ============================================================================
+// DurationPicker
+// ============================================================================
+
+const DURATION_PRESETS = [
+  { label: '15m', value: 15 },
+  { label: '30m', value: 30 },
+  { label: '45m', value: 45 },
+  { label: '1h', value: 60 },
+  { label: '1.5h', value: 90 },
+  { label: '2h', value: 120 },
+  { label: '3h', value: 180 },
+  { label: '4h', value: 240 },
+];
+
+interface DurationPickerProps {
+  task: TaskWithGoals;
+  onUpdate: (input: UpdateTaskInput) => void;
+}
+
+function DurationPicker({ task, onUpdate }: DurationPickerProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [customValue, setCustomValue] = useState('');
+
+  const formatDuration = (minutes: number) => {
+    if (minutes >= 60) {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    }
+    return `${minutes}m`;
+  };
+
+  const handleSelectPreset = (value: number) => {
+    onUpdate({ estimated_minutes: value });
+    setIsOpen(false);
+  };
+
+  const handleCustomSubmit = () => {
+    const parsed = parseInt(customValue, 10);
+    if (parsed > 0) {
+      onUpdate({ estimated_minutes: parsed });
+      setCustomValue('');
+      setIsOpen(false);
+    }
+  };
+
+  const handleClear = () => {
+    onUpdate({ estimated_minutes: null });
+    setIsOpen(false);
+  };
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <button className="flex items-center gap-2 text-sm hover:bg-accent/50 rounded px-1 py-0.5 transition-colors">
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          <span>
+            {task.estimated_minutes ? (
+              formatDuration(task.estimated_minutes)
+            ) : (
+              <span className="text-muted-foreground">Set duration...</span>
+            )}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-2" align="start">
+        <div className="grid grid-cols-2 gap-1">
+          {DURATION_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              onClick={() => handleSelectPreset(preset.value)}
+              className={cn(
+                'px-3 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left',
+                task.estimated_minutes === preset.value && 'bg-accent'
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="border-t border-border mt-2 pt-2">
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              placeholder="Custom min"
+              value={customValue}
+              onChange={(e) => setCustomValue(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}
+              className="h-7 text-sm"
+              min={1}
+              max={480}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              disabled={!customValue || parseInt(customValue, 10) < 1}
+              onClick={handleCustomSubmit}
+            >
+              Set
+            </Button>
+          </div>
+        </div>
+
+        {task.estimated_minutes && (
+          <button
+            onClick={handleClear}
+            className="w-full text-left px-3 py-1.5 text-sm rounded hover:bg-accent transition-colors text-muted-foreground mt-1"
+          >
+            No duration
+          </button>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

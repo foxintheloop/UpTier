@@ -20,12 +20,14 @@ import {
   endOfWeek,
   startOfMonth,
   endOfMonth,
+  startOfDay,
   eachDayOfInterval,
   addWeeks,
   subWeeks,
   addMonths,
   subMonths,
   addDays,
+  subDays,
   format,
   isToday,
   isSameMonth,
@@ -33,13 +35,14 @@ import {
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
-import type { TaskWithGoals } from '@uptier/shared';
+import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
+import { DayView, TimeGridOverlayBlock } from './DayView';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type CalendarViewMode = 'business-week' | 'week' | 'month';
+type CalendarViewMode = 'day' | 'business-week' | 'week' | 'month';
 
 interface CalendarViewProps {
   onSelectTask: (task: TaskWithGoals) => void;
@@ -55,6 +58,7 @@ const WEEK_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const BUSINESS_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 const VIEW_MODE_OPTIONS: { value: CalendarViewMode; label: string; shortLabel: string }[] = [
+  { value: 'day', label: 'Day', shortLabel: 'D' },
   { value: 'business-week', label: 'Business Week', shortLabel: 'BW' },
   { value: 'week', label: 'Week', shortLabel: 'W' },
   { value: 'month', label: 'Month', shortLabel: 'M' },
@@ -264,7 +268,7 @@ export function CalendarView({ onSelectTask, selectedTaskId }: CalendarViewProps
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState<CalendarViewMode>(() => {
     const saved = localStorage.getItem(CALENDAR_VIEW_MODE_KEY);
-    if (saved === 'business-week' || saved === 'week' || saved === 'month') return saved;
+    if (saved === 'day' || saved === 'business-week' || saved === 'week' || saved === 'month') return saved;
     return 'week';
   });
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -287,6 +291,11 @@ export function CalendarView({ onSelectTask, selectedTaskId }: CalendarViewProps
     let start: Date, end: Date;
 
     switch (viewMode) {
+      case 'day': {
+        start = startOfDay(currentDate);
+        end = startOfDay(currentDate);
+        break;
+      }
       case 'business-week': {
         const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
         start = addDays(weekStart, 1); // Monday
@@ -351,30 +360,59 @@ export function CalendarView({ onSelectTask, selectedTaskId }: CalendarViewProps
     const task = active.data.current?.task as TaskWithGoals | undefined;
     if (!task) return;
 
-    const newDate = over.id as string; // dateKey in yyyy-MM-dd format
-    if (newDate === task.due_date) return; // dropped on same day
+    const overId = over.id as string;
 
-    await window.electronAPI.tasks.update(task.id, { due_date: newDate });
-    queryClient.invalidateQueries({ queryKey: ['tasks'] });
-  }, [queryClient]);
+    if (overId === 'unscheduled') {
+      // Unschedule: clear due_time
+      if (task.due_time) {
+        await window.electronAPI.tasks.update(task.id, { due_time: null });
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      }
+    } else if (overId.startsWith('time:')) {
+      // Schedule at specific time slot
+      const time = overId.replace('time:', '');
+      const updates: UpdateTaskInput = { due_time: time };
+      if (!task.due_date) {
+        updates.due_date = format(currentDate, 'yyyy-MM-dd');
+      }
+      if (!task.estimated_minutes) {
+        updates.estimated_minutes = 30;
+      }
+      await window.electronAPI.tasks.update(task.id, updates);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    } else {
+      // Date cell drop (existing behavior)
+      if (overId !== task.due_date) {
+        await window.electronAPI.tasks.update(task.id, { due_date: overId });
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      }
+    }
+  }, [queryClient, currentDate]);
 
   // Navigation handlers
   const navigatePrev = () => {
-    setCurrentDate((prev) =>
-      viewMode === 'month' ? subMonths(prev, 1) : subWeeks(prev, 1),
-    );
+    setCurrentDate((prev) => {
+      if (viewMode === 'day') return subDays(prev, 1);
+      if (viewMode === 'month') return subMonths(prev, 1);
+      return subWeeks(prev, 1);
+    });
   };
 
   const navigateNext = () => {
-    setCurrentDate((prev) =>
-      viewMode === 'month' ? addMonths(prev, 1) : addWeeks(prev, 1),
-    );
+    setCurrentDate((prev) => {
+      if (viewMode === 'day') return addDays(prev, 1);
+      if (viewMode === 'month') return addMonths(prev, 1);
+      return addWeeks(prev, 1);
+    });
   };
 
   const navigateToday = () => setCurrentDate(new Date());
 
   // Period label
   const periodLabel = useMemo(() => {
+    if (viewMode === 'day') {
+      return format(currentDate, 'EEEE, MMMM d, yyyy');
+    }
     if (viewMode === 'month') {
       return format(currentDate, 'MMMM yyyy');
     }
@@ -413,56 +451,69 @@ export function CalendarView({ onSelectTask, selectedTaskId }: CalendarViewProps
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* Day name headers */}
-          <div className={cn('grid border-b border-border flex-shrink-0', gridCols)}>
-            {dayNames.map((name) => (
-              <div
-                key={name}
-                className="text-xs font-medium text-muted-foreground text-center py-2 border-r border-border last:border-r-0"
-              >
-                {name}
-              </div>
-            ))}
-          </div>
+        {viewMode === 'day' ? (
+          <DayView
+            date={currentDate}
+            tasks={tasks}
+            onSelectTask={onSelectTask}
+            selectedTaskId={selectedTaskId}
+          />
+        ) : (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {/* Day name headers */}
+            <div className={cn('grid border-b border-border flex-shrink-0', gridCols)}>
+              {dayNames.map((name) => (
+                <div
+                  key={name}
+                  className="text-xs font-medium text-muted-foreground text-center py-2 border-r border-border last:border-r-0"
+                >
+                  {name}
+                </div>
+              ))}
+            </div>
 
-          {/* Day cells grid */}
-          <div
-            className={cn('grid flex-1 min-h-0 overflow-hidden', gridCols)}
-            style={{
-              gridTemplateRows: viewMode === 'month'
-                ? `repeat(${weekRows}, minmax(0, 1fr))`
-                : 'minmax(0, 1fr)',
-            }}
-          >
-            {days.map((day) => {
-              const dateKey = format(day, 'yyyy-MM-dd');
-              return (
-                <CalendarDayCell
-                  key={dateKey}
-                  dateKey={dateKey}
-                  date={day}
-                  tasks={tasksByDay.get(dateKey) || []}
-                  isCurrentMonth={viewMode !== 'month' || isSameMonth(day, currentDate)}
-                  viewMode={viewMode}
-                  onSelectTask={onSelectTask}
-                  selectedTaskId={selectedTaskId}
-                />
-              );
-            })}
+            {/* Day cells grid */}
+            <div
+              className={cn('grid flex-1 min-h-0 overflow-hidden', gridCols)}
+              style={{
+                gridTemplateRows: viewMode === 'month'
+                  ? `repeat(${weekRows}, minmax(0, 1fr))`
+                  : 'minmax(0, 1fr)',
+              }}
+            >
+              {days.map((day) => {
+                const dateKey = format(day, 'yyyy-MM-dd');
+                return (
+                  <CalendarDayCell
+                    key={dateKey}
+                    dateKey={dateKey}
+                    date={day}
+                    tasks={tasksByDay.get(dateKey) || []}
+                    isCurrentMonth={viewMode !== 'month' || isSameMonth(day, currentDate)}
+                    viewMode={viewMode}
+                    onSelectTask={onSelectTask}
+                    selectedTaskId={selectedTaskId}
+                  />
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Drag overlay - floating task preview */}
         <DragOverlay dropAnimation={null}>
           {activeDragTask && (
-            <CalendarTaskItem
-              task={activeDragTask}
-              isSelected={false}
-              onSelect={() => {}}
-              compact={viewMode === 'month'}
-              isOverlay
-            />
+            viewMode === 'day' ? (
+              <TimeGridOverlayBlock task={activeDragTask} />
+            ) : (
+              <CalendarTaskItem
+                task={activeDragTask}
+                isSelected={false}
+                onSelect={() => {}}
+                compact={viewMode === 'month'}
+                isOverlay
+              />
+            )
           )}
         </DragOverlay>
       </DndContext>
