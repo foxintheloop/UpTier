@@ -14,6 +14,7 @@ import { taskTools } from './tools/tasks.js';
 import { priorityTools } from './tools/priorities.js';
 import { goalTools } from './tools/goals.js';
 import { subtaskTools } from './tools/subtasks.js';
+import { scheduleTools } from './tools/schedule.js';
 import { createScopedLogger, createToolTimer, getLogFilePath } from './logger.js';
 
 const serverLog = createScopedLogger('server');
@@ -28,6 +29,7 @@ const allTools = {
   ...priorityTools,
   ...goalTools,
   ...subtaskTools,
+  ...scheduleTools,
 };
 
 type ToolName = keyof typeof allTools;

@@ -202,6 +202,13 @@ UpTier exposes powerful tools to Claude for managing your tasks:
 | `link_tasks_to_goal` | Associate tasks with goals |
 | `get_goal_progress` | Get completion stats for a goal |
 
+### Day Planner
+| Tool | Description |
+|------|-------------|
+| `get_day_schedule` | Get scheduled tasks, unscheduled tasks, and free time blocks for a date |
+| `schedule_tasks` | Schedule tasks onto the day planner time grid |
+| `unschedule_task` | Remove a task from the time grid to unscheduled sidebar |
+
 ### Subtasks & Tags
 | Tool | Description |
 |------|-------------|

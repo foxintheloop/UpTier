@@ -13,11 +13,12 @@ import type { TaskWithGoals } from '@uptier/shared';
 
 const DAY_START_HOUR = 6;
 const DAY_END_HOUR = 22;
-const HOUR_HEIGHT_PX = 64;
+const HOUR_HEIGHT_PX = 80;
 const SNAP_MINUTES = 15;
 const TOTAL_HOURS = DAY_END_HOUR - DAY_START_HOUR;
 const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT_PX;
 const DEFAULT_DURATION = 30;
+const BLOCK_GAP_PX = 2;
 
 // ============================================================================
 // Helpers
@@ -81,7 +82,10 @@ function TimeGridBlock({ task, isSelected, onSelect, onResizeStart }: TimeGridBl
   const startMinutes = task.due_time ? timeToMinutes(task.due_time) : 0;
   const duration = task.estimated_minutes || DEFAULT_DURATION;
   const top = minutesToTop(startMinutes);
-  const height = Math.max(durationToHeight(duration), 20);
+  const rawHeight = Math.max(durationToHeight(duration), 20 + BLOCK_GAP_PX);
+  const height = rawHeight - BLOCK_GAP_PX;
+
+  const paddingClass = height <= 24 ? 'py-px' : height <= 36 ? 'py-0.5' : 'py-1';
 
   return (
     <div
@@ -94,7 +98,8 @@ function TimeGridBlock({ task, isSelected, onSelect, onResizeStart }: TimeGridBl
         onSelect();
       }}
       className={cn(
-        'absolute left-14 right-2 rounded-md px-2 py-1 cursor-grab active:cursor-grabbing transition-shadow overflow-hidden group',
+        'absolute left-14 right-2 rounded-md px-2 cursor-grab active:cursor-grabbing transition-shadow overflow-hidden group',
+        paddingClass,
         isSelected
           ? 'bg-primary/20 ring-1 ring-primary shadow-md'
           : 'bg-accent/80 hover:bg-accent shadow-sm',
@@ -112,7 +117,7 @@ function TimeGridBlock({ task, isSelected, onSelect, onResizeStart }: TimeGridBl
     >
       <div className="flex items-start justify-between gap-1 h-full">
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium truncate">{task.title}</div>
+          <div className={cn('text-xs font-medium truncate', height <= 24 && 'leading-tight')}>{task.title}</div>
           {height >= 36 && (
             <div className="text-xs text-muted-foreground truncate">
               {formatTimeRange(task.due_time!, duration)}
@@ -146,12 +151,16 @@ interface TimeGridOverlayBlockProps {
 
 export function TimeGridOverlayBlock({ task }: TimeGridOverlayBlockProps) {
   const duration = task.estimated_minutes || DEFAULT_DURATION;
-  const height = Math.max(durationToHeight(duration), 20);
+  const rawHeight = Math.max(durationToHeight(duration), 20 + BLOCK_GAP_PX);
+  const height = rawHeight - BLOCK_GAP_PX;
+
+  const paddingClass = height <= 24 ? 'py-px' : height <= 36 ? 'py-0.5' : 'py-1';
 
   return (
     <div
       className={cn(
-        'rounded-md px-2 py-1 shadow-lg opacity-90 w-64',
+        'rounded-md px-2 shadow-lg opacity-90 w-64',
+        paddingClass,
         'bg-accent',
         task.priority_tier === 1 && 'border-l-3 border-red-500',
         task.priority_tier === 2 && 'border-l-3 border-amber-500',
@@ -159,8 +168,10 @@ export function TimeGridOverlayBlock({ task }: TimeGridOverlayBlockProps) {
       )}
       style={{ height: `${height}px` }}
     >
-      <div className="text-xs font-medium truncate">{task.title}</div>
-      <span className="text-xs text-muted-foreground">{formatDuration(duration)}</span>
+      <div className={cn('text-xs font-medium truncate', height <= 24 && 'leading-tight')}>{task.title}</div>
+      {height >= 28 && (
+        <span className="text-xs text-muted-foreground">{formatDuration(duration)}</span>
+      )}
     </div>
   );
 }
