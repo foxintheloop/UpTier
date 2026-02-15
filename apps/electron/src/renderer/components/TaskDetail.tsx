@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -193,11 +194,12 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
       for (const subtask of breakdownSuggestion.subtasks) {
         await window.electronAPI.subtasks.add(task.id, subtask.title);
       }
-      // Update estimated minutes
+      // Update estimated minutes on parent task
       await updateMutation.mutateAsync({ estimated_minutes: breakdownSuggestion.totalEstimatedMinutes });
       queryClient.invalidateQueries({ queryKey: ['subtasks', task.id] });
       setShowBreakdownSuggestion(false);
       setBreakdownSuggestion(null);
+      toast.success(`Added ${breakdownSuggestion.subtasks.length} subtasks`);
     }
   };
 

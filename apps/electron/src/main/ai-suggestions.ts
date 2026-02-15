@@ -101,6 +101,44 @@ const TASK_PATTERNS: Record<string, { keywords: string[]; subtasks: SubtaskSugge
       { title: 'Document and share the plan', estimatedMinutes: 15 },
     ],
   },
+  email: {
+    keywords: ['email', 'respond', 'reply', 'message', 'outreach', 'follow up', 'follow-up'],
+    subtasks: [
+      { title: 'Review context and previous correspondence', estimatedMinutes: 10 },
+      { title: 'Draft response', estimatedMinutes: 15 },
+      { title: 'Review and polish before sending', estimatedMinutes: 5 },
+      { title: 'Send and log any follow-up actions', estimatedMinutes: 5 },
+    ],
+  },
+  design: {
+    keywords: ['design', 'wireframe', 'mockup', 'prototype', 'UI', 'UX', 'layout'],
+    subtasks: [
+      { title: 'Gather requirements and references', estimatedMinutes: 20 },
+      { title: 'Create initial wireframes/sketches', estimatedMinutes: 30 },
+      { title: 'Build high-fidelity mockup', estimatedMinutes: 60 },
+      { title: 'Get feedback and iterate', estimatedMinutes: 20 },
+      { title: 'Finalize and hand off assets', estimatedMinutes: 15 },
+    ],
+  },
+  testing: {
+    keywords: ['test', 'QA', 'quality', 'verify', 'validate', 'regression'],
+    subtasks: [
+      { title: 'Define test cases and scenarios', estimatedMinutes: 20 },
+      { title: 'Set up test environment', estimatedMinutes: 15 },
+      { title: 'Execute test cases', estimatedMinutes: 45 },
+      { title: 'Document results and file bugs', estimatedMinutes: 15 },
+      { title: 'Verify fixes and retest', estimatedMinutes: 15 },
+    ],
+  },
+  setup: {
+    keywords: ['setup', 'install', 'configure', 'deploy', 'migration', 'infrastructure'],
+    subtasks: [
+      { title: 'Review documentation and prerequisites', estimatedMinutes: 15 },
+      { title: 'Install and configure dependencies', estimatedMinutes: 30 },
+      { title: 'Run setup and verify functionality', estimatedMinutes: 20 },
+      { title: 'Document configuration for the team', estimatedMinutes: 15 },
+    ],
+  },
 };
 
 /**
@@ -234,17 +272,18 @@ export function suggestBreakdown(taskId: string): BreakdownSuggestion | null {
 
   const titleLower = task.title.toLowerCase();
   const notesLower = (task.notes || '').toLowerCase();
-  const combinedText = `${titleLower} ${notesLower}`;
 
-  // Find matching pattern
+  // Find matching pattern — title matches weighted 2x vs notes matches
   let bestMatch: { pattern: string; score: number } | null = null;
 
   for (const [patternName, pattern] of Object.entries(TASK_PATTERNS)) {
     let score = 0;
     for (const keyword of pattern.keywords) {
-      if (combinedText.includes(keyword.toLowerCase())) {
-        // Longer keywords are more specific and valuable
-        score += keyword.length;
+      const kw = keyword.toLowerCase();
+      if (titleLower.includes(kw)) {
+        score += kw.length * 2;
+      } else if (notesLower.includes(kw)) {
+        score += kw.length;
       }
     }
     if (score > 0 && (!bestMatch || score > bestMatch.score)) {

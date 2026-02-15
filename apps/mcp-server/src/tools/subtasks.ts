@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getDb, generateId, nowISO } from '../database.js';
 import { notifyChange } from '../changelog.js';
+import { updateTask } from './tasks.js';
 import type { Subtask } from '@uptier/shared';
 
 // ============================================================================
@@ -32,6 +33,14 @@ export const uncompleteSubtaskSchema = z.object({
 export const reorderSubtasksSchema = z.object({
   task_id: z.string().describe('Parent task ID'),
   subtask_ids: z.array(z.string()).describe('Subtask IDs in desired order'),
+});
+
+export const decomposeTaskSchema = z.object({
+  task_id: z.string().describe('The task to decompose into subtasks'),
+  subtasks: z.array(z.object({
+    title: z.string().describe('Subtask title'),
+    estimated_minutes: z.number().optional().describe('Estimated duration in minutes'),
+  })).min(1).describe('Subtasks to create. Claude should analyze the task and generate appropriate subtasks.'),
 });
 
 export const getSubtasksSchema = z.object({
@@ -203,6 +212,34 @@ export const subtaskTools = {
       reorderSubtasks(input.task_id, input.subtask_ids);
       notifyChange('subtask', 'update');
       return { success: true };
+    },
+  },
+
+  decompose_task: {
+    description: 'Decompose a task into subtasks. Analyze the task and create appropriate subtasks with estimated durations. Also updates the parent task estimated_minutes with the total.',
+    inputSchema: decomposeTaskSchema,
+    handler: (input: z.infer<typeof decomposeTaskSchema>) => {
+      const created: Subtask[] = [];
+      let totalMinutes = 0;
+
+      for (const sub of input.subtasks) {
+        const subtask = addSubtask(input.task_id, sub.title);
+        created.push(subtask);
+        totalMinutes += sub.estimated_minutes ?? 0;
+      }
+
+      // Update parent task estimated_minutes with the sum
+      if (totalMinutes > 0) {
+        updateTask(input.task_id, { estimated_minutes: totalMinutes });
+        notifyChange('task', 'update', input.task_id);
+      }
+
+      notifyChange('subtask', 'create');
+      return {
+        success: true,
+        subtasks: created,
+        totalEstimatedMinutes: totalMinutes,
+      };
     },
   },
 };
