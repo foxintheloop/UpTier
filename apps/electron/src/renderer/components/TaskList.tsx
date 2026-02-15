@@ -64,6 +64,25 @@ export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskL
     enabled: !!listId,
   });
 
+  // Query at-risk tasks for deadline warning indicators
+  const { data: atRiskTasks = [] } = useQuery<Array<{
+    id: string;
+    risk_level: 'warning' | 'critical';
+    reason: string;
+  }>>({
+    queryKey: ['deadlines', 'atRisk'],
+    queryFn: () => window.electronAPI.deadlines.getAtRisk(),
+    staleTime: 60_000,
+  });
+
+  const atRiskMap = useMemo(() => {
+    const map = new Map<string, { risk_level: 'warning' | 'critical'; reason: string }>();
+    for (const t of atRiskTasks) {
+      map.set(t.id, { risk_level: t.risk_level, reason: t.reason });
+    }
+    return map;
+  }, [atRiskTasks]);
+
   // Filter tasks by search query
   const filteredTasks = useMemo(() => {
     if (!searchQuery.trim()) return tasks;
@@ -186,17 +205,22 @@ export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskL
       <div className="mb-4">
         {tier && <TierHeader tier={tier} count={groupTasks.length} />}
         <div className="space-y-1">
-          {groupTasks.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              isSelected={task.id === selectedTaskId}
-              onSelect={() => onSelectTask(task)}
-              onComplete={(completed) => handleTaskComplete(task.id, completed)}
-              onStartFocus={onStartFocus}
-              isDraggable={!isSmartListView}
-            />
-          ))}
+          {groupTasks.map((task) => {
+            const risk = atRiskMap.get(task.id);
+            return (
+              <TaskItem
+                key={task.id}
+                task={task}
+                isSelected={task.id === selectedTaskId}
+                onSelect={() => onSelectTask(task)}
+                onComplete={(completed) => handleTaskComplete(task.id, completed)}
+                onStartFocus={onStartFocus}
+                isDraggable={!isSmartListView}
+                riskLevel={risk?.risk_level}
+                riskReason={risk?.reason}
+              />
+            );
+          })}
         </div>
       </div>
     );
@@ -286,17 +310,22 @@ export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskL
                         UNPRIORITIZED
                       </div>
                       <div className="space-y-1">
-                        {groupedTasks.unprioritized.map((task) => (
-                          <TaskItem
-                            key={task.id}
-                            task={task}
-                            isSelected={task.id === selectedTaskId}
-                            onSelect={() => onSelectTask(task)}
-                            onComplete={(completed) => handleTaskComplete(task.id, completed)}
-                            onStartFocus={onStartFocus}
-                            isDraggable={!isSmartListView}
-                          />
-                        ))}
+                        {groupedTasks.unprioritized.map((task) => {
+                          const risk = atRiskMap.get(task.id);
+                          return (
+                            <TaskItem
+                              key={task.id}
+                              task={task}
+                              isSelected={task.id === selectedTaskId}
+                              onSelect={() => onSelectTask(task)}
+                              onComplete={(completed) => handleTaskComplete(task.id, completed)}
+                              onStartFocus={onStartFocus}
+                              isDraggable={!isSmartListView}
+                              riskLevel={risk?.risk_level}
+                              riskReason={risk?.reason}
+                            />
+                          );
+                        })}
                       </div>
                     </div>
                   )}

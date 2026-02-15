@@ -26,6 +26,7 @@ import {
 import type { UpTierExport, ImportPreview, ImportResult } from './export-import';
 import { suggestDueDate, suggestBreakdown, getTaskSuggestions } from './ai-suggestions';
 import type { DueDateSuggestion, BreakdownSuggestion, TaskSuggestions } from './ai-suggestions';
+import { getAtRiskTasks } from './deadline-detector';
 import {
   startFocusSession,
   endFocusSession,
@@ -1307,5 +1308,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('focus:getAll', withLogging('focus:getAll', (_, taskId?: string) => getFocusSessions(taskId)));
   ipcMain.handle('focus:delete', withLogging('focus:delete', (_, id: string) => deleteFocusSession(id)));
 
-  ipcLog.info('IPC handlers registered', { count: 57 });
+  // Deadline Detection
+  ipcMain.handle('deadlines:getAtRisk', withLogging('deadlines:getAtRisk', () => getAtRiskTasks()));
+
+  ipcLog.info('IPC handlers registered', { count: 58 });
 }

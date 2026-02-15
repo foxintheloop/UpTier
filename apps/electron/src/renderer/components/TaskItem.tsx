@@ -4,7 +4,7 @@ import { Checkbox } from './ui/checkbox';
 import { PriorityBadge } from './PriorityBadge';
 import { TagBadge } from './TagBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Clock, Target, Zap, Gem, GripVertical, Play, Repeat } from 'lucide-react';
+import { Clock, Target, Zap, Gem, GripVertical, Play, Repeat, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals } from '@uptier/shared';
 import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
@@ -16,9 +16,11 @@ interface TaskItemProps {
   onComplete: (completed: boolean) => void;
   onStartFocus?: (task: TaskWithGoals) => void;
   isDraggable?: boolean;
+  riskLevel?: 'warning' | 'critical';
+  riskReason?: string;
 }
 
-export function TaskItem({ task, isSelected, onSelect, onComplete, onStartFocus, isDraggable = true }: TaskItemProps) {
+export function TaskItem({ task, isSelected, onSelect, onComplete, onStartFocus, isDraggable = true, riskLevel, riskReason }: TaskItemProps) {
   const {
     attributes,
     listeners,
@@ -174,6 +176,19 @@ export function TaskItem({ task, isSelected, onSelect, onComplete, onStartFocus,
                   isDueOverdue ? 'text-red-400' : 'text-muted-foreground'
                 )}
               >
+                {riskLevel && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <AlertTriangle
+                        className={cn(
+                          'h-3 w-3',
+                          riskLevel === 'critical' ? 'text-red-400' : 'text-amber-400'
+                        )}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>{riskReason}</TooltipContent>
+                  </Tooltip>
+                )}
                 {formatDueDate(task.due_date)}
                 {task.recurrence_rule && <Repeat className="h-3 w-3" />}
               </div>

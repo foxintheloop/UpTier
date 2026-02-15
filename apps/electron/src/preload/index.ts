@@ -268,6 +268,20 @@ const electronAPI = {
       ipcRenderer.invoke('database:getCurrentPath'),
   },
 
+  // Deadline Detection
+  deadlines: {
+    getAtRisk: (): Promise<Array<{
+      id: string;
+      title: string;
+      due_date: string;
+      due_time: string | null;
+      estimated_minutes: number;
+      remaining_minutes: number;
+      risk_level: 'warning' | 'critical';
+      reason: string;
+    }>> => ipcRenderer.invoke('deadlines:getAtRisk'),
+  },
+
   // AI Suggestions
   suggestions: {
     getDueDate: (taskId: string): Promise<DueDateSuggestion | null> =>

@@ -145,6 +145,13 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
     queryFn: () => window.electronAPI.goals.getAllWithProgress(),
   });
 
+  const { data: atRiskTasks = [] } = useQuery<Array<{ id: string; risk_level: 'warning' | 'critical' }>>({
+    queryKey: ['deadlines', 'atRisk'],
+    queryFn: () => window.electronAPI.deadlines.getAtRisk(),
+    staleTime: 60_000,
+  });
+  const atRiskCount = atRiskTasks.length;
+
   const createListMutation = useMutation({
     mutationFn: (name: string) => window.electronAPI.lists.create({ name }),
     onSuccess: () => {
@@ -509,26 +516,35 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
         <div className={cn("p-2", collapsed && "px-1")}>
           {/* Smart Lists */}
           <div className="mb-4">
-            {SMART_LISTS.map((smartList) => (
-              <button
-                key={smartList.id}
-                onClick={() => onSelectList(smartList.id)}
-                className={cn(
-                  'w-full flex items-center rounded-md text-sm transition-colors',
-                  collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-                  selectedListId === smartList.id
-                    ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-accent/50 text-muted-foreground'
-                )}
-                title={collapsed ? smartList.name : undefined}
-              >
-                <smartList.icon
-                  className="h-4 w-4 flex-shrink-0"
-                  style={{ color: smartList.color }}
-                />
-                {!collapsed && <span>{smartList.name}</span>}
-              </button>
-            ))}
+            {SMART_LISTS.map((smartList) => {
+              const showBadge = !collapsed && atRiskCount > 0 &&
+                (smartList.id === 'smart:my_day' || smartList.id === 'smart:planned');
+              return (
+                <button
+                  key={smartList.id}
+                  onClick={() => onSelectList(smartList.id)}
+                  className={cn(
+                    'w-full flex items-center rounded-md text-sm transition-colors',
+                    collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
+                    selectedListId === smartList.id
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-accent/50 text-muted-foreground'
+                  )}
+                  title={collapsed ? smartList.name : undefined}
+                >
+                  <smartList.icon
+                    className="h-4 w-4 flex-shrink-0"
+                    style={{ color: smartList.color }}
+                  />
+                  {!collapsed && <span className="flex-1 text-left">{smartList.name}</span>}
+                  {showBadge && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-amber-500/20 text-amber-400">
+                      {atRiskCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Custom Smart Lists (Filters) */}
