@@ -9,6 +9,7 @@ import { CalendarView } from './components/CalendarView';
 import { Settings } from './components/Settings';
 import { CommandPalette } from './components/CommandPalette';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
+import { DailyPlanning } from './components/DailyPlanning';
 import { FocusTimerOverlay } from './components/FocusTimerOverlay';
 import { Toaster } from './components/ui/toaster';
 import type { TaskWithGoals, GoalWithProgress, Task, List } from '@uptier/shared';
@@ -75,6 +76,7 @@ export default function App() {
   const [activeFocusSession, setActiveFocusSession] = useState<ActiveFocusSession | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [dailyPlanningOpen, setDailyPlanningOpen] = useState(false);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
 
@@ -133,6 +135,27 @@ export default function App() {
   const handleThemeChange = (theme: ThemeMode) => {
     applyTheme(theme);
   };
+
+  // Auto-launch daily planning if not done today
+  useEffect(() => {
+    const checkPlanning = async () => {
+      try {
+        const settings = await window.electronAPI.settings.get();
+        const planningEnabled = (settings as { planning?: { enabled?: boolean } })?.planning?.enabled ?? true;
+        if (!planningEnabled) return;
+
+        const lastDate = await window.electronAPI.planning.getLastPlanningDate();
+        const today = new Date().toISOString().split('T')[0];
+        if (lastDate !== today) {
+          // Delay slightly to let the UI load first
+          setTimeout(() => setDailyPlanningOpen(true), 1000);
+        }
+      } catch {
+        // Settings may not have planning yet, ignore
+      }
+    };
+    checkPlanning();
+  }, []);
 
   // Listen for database changes from MCP server
   useEffect(() => {
@@ -321,6 +344,7 @@ export default function App() {
         }}
         onSettingsClick={() => setSettingsOpen(true)}
         onSearchClick={() => setCommandPaletteOpen(true)}
+        onPlanDay={() => setDailyPlanningOpen(true)}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         width={sidebarWidth}
@@ -420,6 +444,7 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onShowShortcuts={() => setShortcutsOpen(true)}
         onChangeTheme={(theme) => handleThemeChange(theme as ThemeMode)}
+        onPlanDay={() => setDailyPlanningOpen(true)}
       />
 
       {/* Keyboard Shortcuts */}
@@ -435,6 +460,19 @@ export default function App() {
           durationMinutes={activeFocusSession.durationMinutes}
           sessionId={activeFocusSession.sessionId}
           onEnd={handleEndFocus}
+        />
+      )}
+
+      {/* Daily Planning Overlay */}
+      {dailyPlanningOpen && (
+        <DailyPlanning
+          onClose={() => setDailyPlanningOpen(false)}
+          onComplete={() => {
+            setDailyPlanningOpen(false);
+            setSelectedListId('smart:my_day');
+            setSelectedTask(null);
+            setSelectedGoal(null);
+          }}
         />
       )}
     </div>

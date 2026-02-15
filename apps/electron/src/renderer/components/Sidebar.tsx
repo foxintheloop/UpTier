@@ -30,6 +30,7 @@ import {
   Inbox,
   Archive,
   Eye,
+  Sunrise,
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -55,6 +56,7 @@ interface SidebarProps {
   onSettingsClick: () => void;
   onSearchClick?: () => void;
   onDatabaseSwitch?: () => void;
+  onPlanDay?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   width?: number;
@@ -98,7 +100,7 @@ const TIMEFRAME_COLORS: Record<Timeframe, string> = {
   yearly: 'text-red-400',
 };
 
-export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelectGoal, onSettingsClick, onSearchClick, onDatabaseSwitch, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
+export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelectGoal, onSettingsClick, onSearchClick, onDatabaseSwitch, onPlanDay, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listsExpanded, setListsExpanded] = useState(true);
@@ -514,6 +516,17 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
 
       <ScrollArea className="flex-1">
         <div className={cn("p-2", collapsed && "px-1")}>
+          {/* Plan My Day */}
+          {onPlanDay && !collapsed && (
+            <button
+              onClick={onPlanDay}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary mb-2 transition-colors"
+            >
+              <Sunrise className="h-4 w-4" />
+              Plan My Day
+            </button>
+          )}
+
           {/* Smart Lists */}
           <div className="mb-4">
             {SMART_LISTS.map((smartList) => {

@@ -18,6 +18,7 @@ import {
   Monitor,
   Zap,
   AlertCircle,
+  Sunrise,
 } from 'lucide-react';
 import {
   CommandDialog,
@@ -43,6 +44,7 @@ interface CommandPaletteProps {
   onOpenSettings: () => void;
   onShowShortcuts?: () => void;
   onChangeTheme?: (theme: string) => void;
+  onPlanDay?: () => void;
 }
 
 // ============================================================================
@@ -79,6 +81,7 @@ export function CommandPalette({
   onOpenSettings,
   onShowShortcuts,
   onChangeTheme,
+  onPlanDay,
 }: CommandPaletteProps) {
   const [search, setSearch] = useState('');
 
@@ -267,6 +270,15 @@ export function CommandPalette({
             >
               <Keyboard className="mr-2 h-4 w-4" />
               <span>Keyboard Shortcuts</span>
+            </CommandItem>
+          )}
+          {onPlanDay && (
+            <CommandItem
+              value="Plan My Day"
+              onSelect={() => handleSelect(onPlanDay)}
+            >
+              <Sunrise className="mr-2 h-4 w-4" />
+              <span>Plan My Day</span>
             </CommandItem>
           )}
         </CommandGroup>

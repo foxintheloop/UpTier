@@ -28,10 +28,17 @@ export interface DatabaseSettings {
   defaultProfileId: string;
 }
 
+export interface PlanningSettings {
+  lastPlanningDate: string | null;  // YYYY-MM-DD
+  enabled: boolean;                 // auto-launch toggle
+  workingHoursPerDay: number;       // default 8
+}
+
 export interface AppSettings {
   theme: ThemeMode;
   notifications: NotificationSettings;
   databases: DatabaseSettings;
+  planning: PlanningSettings;
 }
 
 interface SettingsSchema {
@@ -73,6 +80,11 @@ const store = new Store<SettingsSchema>({
         profiles: [defaultDatabaseProfile],
         activeProfileId: DEFAULT_PROFILE_ID,
         defaultProfileId: DEFAULT_PROFILE_ID,
+      },
+      planning: {
+        lastPlanningDate: null,
+        enabled: true,
+        workingHoursPerDay: 8,
       },
     },
   },

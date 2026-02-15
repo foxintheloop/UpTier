@@ -28,6 +28,13 @@ import { suggestDueDate, suggestBreakdown, getTaskSuggestions } from './ai-sugge
 import type { DueDateSuggestion, BreakdownSuggestion, TaskSuggestions } from './ai-suggestions';
 import { getAtRiskTasks } from './deadline-detector';
 import {
+  getYesterdaySummary,
+  getAvailableTasks,
+  getTodayOverview,
+  getLastPlanningDate,
+  setLastPlanningDate,
+} from './planning';
+import {
   startFocusSession,
   endFocusSession,
   getActiveFocusSession,
@@ -1311,5 +1318,12 @@ export function registerIpcHandlers(): void {
   // Deadline Detection
   ipcMain.handle('deadlines:getAtRisk', withLogging('deadlines:getAtRisk', () => getAtRiskTasks()));
 
-  ipcLog.info('IPC handlers registered', { count: 58 });
+  // Daily Planning
+  ipcMain.handle('planning:getYesterdaySummary', withLogging('planning:getYesterdaySummary', () => getYesterdaySummary()));
+  ipcMain.handle('planning:getAvailableTasks', withLogging('planning:getAvailableTasks', () => getAvailableTasks()));
+  ipcMain.handle('planning:getTodayOverview', withLogging('planning:getTodayOverview', () => getTodayOverview()));
+  ipcMain.handle('planning:getLastPlanningDate', withLogging('planning:getLastPlanningDate', () => getLastPlanningDate()));
+  ipcMain.handle('planning:setLastPlanningDate', withLogging('planning:setLastPlanningDate', (_, date: string) => setLastPlanningDate(date)));
+
+  ipcLog.info('IPC handlers registered', { count: 63 });
 }

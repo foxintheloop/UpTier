@@ -268,6 +268,20 @@ const electronAPI = {
       ipcRenderer.invoke('database:getCurrentPath'),
   },
 
+  // Daily Planning
+  planning: {
+    getYesterdaySummary: (): Promise<{ completed: TaskWithGoals[]; incomplete: TaskWithGoals[] }> =>
+      ipcRenderer.invoke('planning:getYesterdaySummary'),
+    getAvailableTasks: (): Promise<TaskWithGoals[]> =>
+      ipcRenderer.invoke('planning:getAvailableTasks'),
+    getTodayOverview: (): Promise<{ scheduled: TaskWithGoals[]; unscheduled: TaskWithGoals[]; totalMinutes: number }> =>
+      ipcRenderer.invoke('planning:getTodayOverview'),
+    getLastPlanningDate: (): Promise<string | null> =>
+      ipcRenderer.invoke('planning:getLastPlanningDate'),
+    setLastPlanningDate: (date: string): Promise<void> =>
+      ipcRenderer.invoke('planning:setLastPlanningDate', date),
+  },
+
   // Deadline Detection
   deadlines: {
     getAtRisk: (): Promise<Array<{

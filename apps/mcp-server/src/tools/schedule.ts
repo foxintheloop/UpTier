@@ -45,6 +45,8 @@ function computeEndTime(startTime: string, durationMinutes: number): string {
 // Schemas
 // ============================================================================
 
+const getDailyPlanningContextSchema = z.object({});
+
 const getDayScheduleSchema = z.object({
   date: z.string().optional().describe('Date in YYYY-MM-DD format. Defaults to today if not provided.'),
 });
@@ -277,6 +279,63 @@ Before calling this tool:
     inputSchema: unscheduleTaskSchema,
     handler: (input: z.infer<typeof unscheduleTaskSchema>) => {
       return unscheduleTask(input);
+    },
+  },
+
+  get_daily_planning_context: {
+    description: `Get full context for daily planning. Returns yesterday's summary (completed + incomplete tasks), today's current schedule, available tasks that could be scheduled, and free time blocks. Use this to help the user plan their day by suggesting which tasks to focus on and when to schedule them.`,
+    inputSchema: getDailyPlanningContextSchema,
+    handler: () => {
+      const db = getDb();
+      const today = getTodayDate();
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      // Yesterday's tasks
+      const yesterdayRows = db.prepare(`
+        SELECT id, title, completed, priority_tier, estimated_minutes
+        FROM tasks
+        WHERE due_date = ? OR (completed_at >= ? AND completed_at < ?)
+        ORDER BY completed DESC, priority_tier ASC NULLS LAST
+      `).all(yesterdayStr, yesterdayStr, today) as Array<{
+        id: string; title: string; completed: number;
+        priority_tier: number | null; estimated_minutes: number | null;
+      }>;
+
+      const yesterdayCompleted = yesterdayRows.filter((r) => r.completed);
+      const yesterdayIncomplete = yesterdayRows.filter((r) => !r.completed);
+
+      // Today's schedule
+      const todaySchedule = getDaySchedule({ date: today });
+
+      // Available tasks for planning
+      const availableRows = db.prepare(`
+        SELECT id, title, due_date, priority_tier, estimated_minutes, energy_required
+        FROM tasks
+        WHERE completed = 0
+          AND (
+            due_date <= ?
+            OR priority_tier = 1
+            OR (due_date IS NULL AND priority_tier <= 2)
+          )
+        ORDER BY priority_tier ASC NULLS LAST, due_date ASC NULLS LAST
+      `).all(today) as Array<{
+        id: string; title: string; due_date: string | null;
+        priority_tier: number | null; estimated_minutes: number | null;
+        energy_required: string | null;
+      }>;
+
+      return {
+        success: true,
+        date: today,
+        yesterday: {
+          completed: yesterdayCompleted,
+          incomplete: yesterdayIncomplete,
+        },
+        today: todaySchedule,
+        available_tasks: availableRows,
+      };
     },
   },
 };
