@@ -8,6 +8,7 @@ import { GoalDetail } from './components/GoalDetail';
 import { CalendarView } from './components/CalendarView';
 import { Settings } from './components/Settings';
 import { CommandPalette } from './components/CommandPalette';
+import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { FocusTimerOverlay } from './components/FocusTimerOverlay';
 import { Toaster } from './components/ui/toaster';
 import type { TaskWithGoals, GoalWithProgress, Task, List } from '@uptier/shared';
@@ -73,6 +74,7 @@ export default function App() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [activeFocusSession, setActiveFocusSession] = useState<ActiveFocusSession | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
 
@@ -247,6 +249,12 @@ export default function App() {
       // Skip navigation shortcuts when typing
       if (isInputActive) return;
 
+      // ?: Show keyboard shortcuts reference
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        setShortcutsOpen(true);
+        return;
+      }
+
       // Arrow up: Select previous task
       if (e.key === 'ArrowUp') {
         e.preventDefault();
@@ -410,7 +418,12 @@ export default function App() {
           }
         }}
         onOpenSettings={() => setSettingsOpen(true)}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+        onChangeTheme={(theme) => handleThemeChange(theme as ThemeMode)}
       />
+
+      {/* Keyboard Shortcuts */}
+      <KeyboardShortcuts open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       {/* Toast notifications */}
       <Toaster />

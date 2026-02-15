@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown, Repeat } from 'lucide-react';
+import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -8,6 +8,7 @@ import { Badge } from './ui/badge';
 import { TagPicker } from './TagPicker';
 import { TagBadge } from './TagBadge';
 import { GoalPicker } from './GoalPicker';
+import { SubtaskList } from './SubtaskList';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '@/lib/utils';
 import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
@@ -389,6 +390,37 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
           {/* Duration */}
           <DurationPicker task={task} onUpdate={(input) => updateMutation.mutate(input)} />
 
+          {/* Energy Level */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Zap className="h-4 w-4" />
+              Energy Level
+            </div>
+            <div className="flex gap-2">
+              {([
+                { value: 'low' as const, label: 'Low', icon: Battery },
+                { value: 'medium' as const, label: 'Medium', icon: BatteryMedium },
+                { value: 'high' as const, label: 'High', icon: BatteryFull },
+              ]).map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  onClick={() => updateMutation.mutate({
+                    energy_required: task.energy_required === value ? null : value,
+                  })}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors',
+                    task.energy_required === value
+                      ? 'bg-primary/20 border-primary text-primary'
+                      : 'border-input hover:bg-accent'
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Goals */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -438,6 +470,9 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
               />
             </div>
           </div>
+
+          {/* Subtasks */}
+          <SubtaskList taskId={task.id} />
 
           {/* Notes */}
           <div className="space-y-2">
