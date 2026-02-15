@@ -11,6 +11,13 @@ import {
   Settings,
   Plus,
   FileText,
+  Keyboard,
+  Moon,
+  SunMedium,
+  Leaf,
+  Monitor,
+  Zap,
+  AlertCircle,
 } from 'lucide-react';
 import {
   CommandDialog,
@@ -34,6 +41,8 @@ interface CommandPaletteProps {
   onNavigateToGoal: (goal: GoalWithProgress) => void;
   onSelectTask: (task: TaskWithGoals) => void;
   onOpenSettings: () => void;
+  onShowShortcuts?: () => void;
+  onChangeTheme?: (theme: string) => void;
 }
 
 // ============================================================================
@@ -48,6 +57,15 @@ const SMART_LISTS = [
   { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 
+const THEMES = [
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'light', label: 'Light', icon: SunMedium },
+  { value: 'earth-dark', label: 'Earth Dark', icon: Leaf },
+  { value: 'earth-light', label: 'Earth Light', icon: Leaf },
+  { value: 'cyberpunk', label: 'Cyberpunk', icon: Zap },
+  { value: 'system', label: 'System', icon: Monitor },
+];
+
 // ============================================================================
 // CommandPalette
 // ============================================================================
@@ -59,6 +77,8 @@ export function CommandPalette({
   onNavigateToGoal,
   onSelectTask,
   onOpenSettings,
+  onShowShortcuts,
+  onChangeTheme,
 }: CommandPaletteProps) {
   const [search, setSearch] = useState('');
 
@@ -182,6 +202,45 @@ export function CommandPalette({
 
         <CommandSeparator />
 
+        {/* Priority Filters */}
+        <CommandGroup heading="Filter by Priority">
+          <CommandItem
+            value="Show Do Now tasks"
+            onSelect={() => handleSelect(() => onNavigateToList('smart:important'))}
+          >
+            <AlertCircle className="mr-2 h-4 w-4 text-red-400" />
+            <span>Show Do Now tasks</span>
+          </CommandItem>
+          <CommandItem
+            value="Show Planned tasks"
+            onSelect={() => handleSelect(() => onNavigateToList('smart:planned'))}
+          >
+            <Calendar className="mr-2 h-4 w-4 text-blue-400" />
+            <span>Show Planned tasks</span>
+          </CommandItem>
+        </CommandGroup>
+
+        {/* Theme Switching */}
+        {onChangeTheme && (
+          <CommandGroup heading="Themes">
+            {THEMES.map((theme) => {
+              const Icon = theme.icon;
+              return (
+                <CommandItem
+                  key={theme.value}
+                  value={`theme-${theme.label}`}
+                  onSelect={() => handleSelect(() => onChangeTheme(theme.value))}
+                >
+                  <Icon className="mr-2 h-4 w-4" />
+                  <span>{theme.label}</span>
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+        )}
+
+        <CommandSeparator />
+
         {/* Actions */}
         <CommandGroup heading="Actions">
           <CommandItem
@@ -201,6 +260,15 @@ export function CommandPalette({
             <Plus className="mr-2 h-4 w-4" />
             <span>Create New Task</span>
           </CommandItem>
+          {onShowShortcuts && (
+            <CommandItem
+              value="Keyboard Shortcuts"
+              onSelect={() => handleSelect(onShowShortcuts)}
+            >
+              <Keyboard className="mr-2 h-4 w-4" />
+              <span>Keyboard Shortcuts</span>
+            </CommandItem>
+          )}
         </CommandGroup>
       </CommandList>
     </CommandDialog>
