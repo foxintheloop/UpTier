@@ -16,11 +16,57 @@ The app has three main areas:
 
 ---
 
+## Feature Tiers & Onboarding
+
+UpTier uses a progressive feature system so you can start simple and add complexity as needed.
+
+### Onboarding Wizard
+
+New users see a 3-step onboarding wizard on first launch:
+
+1. **Welcome** — Introduction to UpTier
+2. **Choose Your Level** — Select a feature preset (Basic, Intermediate, or Advanced)
+3. **Confirmation** — Review your choice and start using the app
+
+### Feature Presets
+
+| Feature | Basic | Intermediate | Advanced |
+|---------|:-----:|:------------:|:--------:|
+| Tasks, Lists, Search, Themes | always | always | always |
+| Due dates, Tags, Subtasks | always | always | always |
+| Priority Tiers & Scoring | - | yes | yes |
+| Focus Timer | - | yes | yes |
+| Calendar View | - | yes | yes |
+| Custom Smart Filters | - | yes | yes |
+| Notifications | - | yes | yes |
+| Export / Import | - | yes | yes |
+| Goals System | - | yes | yes |
+| Productivity Dashboard | - | - | yes |
+| Daily Planning Ritual | - | - | yes |
+| AI Suggestions | - | - | yes |
+| Deadline Alerts | - | - | yes |
+| Streaks & Celebrations | - | - | yes |
+| Database Profiles | - | - | yes |
+
+### Customizing Features
+
+You can change your tier or toggle individual features at any time:
+
+1. Open **Settings** (gear icon in the sidebar)
+2. Go to the **Features** section
+3. Click a preset button (Basic, Intermediate, Advanced) to switch all at once, or toggle individual features on and off
+
+Disabled features are hidden from the sidebar, task detail panel, command palette, and all overlays.
+
+> **Existing users** who upgrade to a version with the tier system will have all features enabled by default (Advanced) and will not see the onboarding wizard.
+
+---
+
 ## Lists
 
 ### Built-in Smart Lists
 
-Five smart lists appear at the top of the sidebar:
+Six smart lists appear at the top of the sidebar:
 
 | Smart List | What It Shows |
 |------------|---------------|
@@ -28,6 +74,7 @@ Five smart lists appear at the top of the sidebar:
 | **Important** | Tasks with priority tier 1 or 2 |
 | **Planned** | Tasks with any due date set |
 | **Calendar** | Calendar view of all scheduled tasks |
+| **Dashboard** | Productivity analytics and stats |
 | **Completed** | All completed tasks |
 
 ### Regular Lists
@@ -121,9 +168,10 @@ Drag tasks within a list to reorder them. A drag handle appears when you hover o
 
 ### Completing and Deleting Tasks
 
-- **Complete**: Click the checkbox next to a task, or select a task and press Space
+- **Complete**: Click the checkbox next to a task in the list, or select a task and press Space
+- **Complete from Detail Panel**: Use the circular checkbox next to the task title in the detail panel
 - **Uncomplete**: Click the checkbox again to mark it incomplete
-- **Delete**: Select a task and press Delete, or use the delete option in the detail panel
+- **Delete**: Select a task and press Delete, or use the delete button in the detail panel
 - **Recurring tasks**: Completing a recurring task automatically creates the next instance with the next due date
 
 ### Searching Tasks
@@ -315,6 +363,48 @@ When the timer completes (or you end it early), the session is recorded. You can
 
 ---
 
+## Dashboard & Analytics
+
+Select **Dashboard** from the smart lists in the sidebar to view your productivity metrics.
+
+### Today Summary
+
+Four cards at the top show your daily stats:
+
+| Card | What It Shows |
+|------|---------------|
+| **Completed** | Number of tasks completed today |
+| **Completion Rate** | Percentage of today's tasks completed |
+| **Focus Time** | Total focus timer minutes logged today |
+| **Planned** | Number of tasks due today |
+
+### Weekly Completion Chart
+
+A bar chart showing your daily completion counts for the past 7 days. Today's bar is highlighted.
+
+### Streak Tracking
+
+Your current streak (consecutive days with at least one completed task) and your longest streak are displayed. A flame icon indicates an active streak.
+
+### Focus Goal Progress
+
+A circular progress ring shows how much of your daily focus goal you've completed. Set your daily focus goal in **Settings > Productivity** (default: 120 minutes).
+
+### Priority Distribution
+
+A breakdown of your active tasks by priority tier (Do Now, Do Soon, Backlog) showing the count in each category.
+
+### Streaks & Celebrations
+
+UpTier celebrates your productivity milestones:
+
+- **All daily tasks complete** — Confetti animation with a congratulatory message
+- **Streak milestones** (e.g., 10-day, 30-day streaks) — Confetti with the milestone count
+
+Celebrations appear as a brief overlay and dismiss automatically.
+
+---
+
 ## AI Features
 
 ### Due Date Suggestions
@@ -410,6 +500,16 @@ Six themes are available:
 
 Switch themes in Settings or via the command palette (Ctrl+K, then search for a theme name).
 
+### Features
+
+Control which features are active in the app:
+
+- **Preset buttons** — Click Basic, Intermediate, or Advanced to switch all features at once
+- **Individual toggles** — Turn each feature on or off independently
+- **Tier indicator** — Shows your current tier (or "Custom" if you've mixed features from different presets)
+
+See the [Feature Tiers & Onboarding](#feature-tiers--onboarding) section for the full feature matrix.
+
 ### Notifications
 
 Desktop notifications remind you of upcoming tasks:
@@ -422,6 +522,21 @@ Desktop notifications remind you of upcoming tasks:
 | Sound | On | Play a sound with notifications |
 
 Reminders are set automatically from a task's due date and time. Click a notification to jump to the task.
+
+### Productivity
+
+Set your daily focus time goal:
+
+| Option | Duration |
+|--------|----------|
+| Light | 30 min |
+| Moderate | 60 min |
+| Standard | 90 min |
+| Full (default) | 120 min |
+| Extended | 180 min |
+| Maximum | 240 min |
+
+This goal is displayed on the Dashboard as a progress ring.
 
 ### Database Profiles
 
