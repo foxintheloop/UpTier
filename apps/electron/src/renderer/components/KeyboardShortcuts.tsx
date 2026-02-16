@@ -22,7 +22,7 @@ const SHORTCUT_CATEGORIES = [
   {
     name: 'Tasks',
     shortcuts: [
-      { keys: ['Ctrl', 'N'], description: 'New task (focus quick add)' },
+      { keys: ['Ctrl', 'N'], description: 'New task' },
       { keys: ['Space'], description: 'Toggle task completion' },
       { keys: ['Del'], description: 'Delete selected task' },
     ],
