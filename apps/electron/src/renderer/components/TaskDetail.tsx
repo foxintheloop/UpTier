@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
 import { TagPicker } from './TagPicker';
 import { TagBadge } from './TagBadge';
 import { GoalPicker } from './GoalPicker';
@@ -32,6 +33,7 @@ interface TaskDetailProps {
   task: TaskWithGoals;
   onClose: () => void;
   onUpdate: (task: TaskWithGoals) => void;
+  onComplete?: () => void;
   onStartFocus?: (task: TaskWithGoals, durationMinutes: number) => void;
   width?: number;
   onWidthChange?: (width: number) => void;
@@ -58,7 +60,7 @@ interface BreakdownSuggestion {
   reasoning: string;
 }
 
-export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWidthChange }: TaskDetailProps) {
+export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, width, onWidthChange }: TaskDetailProps) {
   const features = useFeatures();
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes || '');
@@ -305,16 +307,27 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
           {/* Title */}
-          <div>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              className="text-lg font-medium border-0 px-0 focus-visible:ring-0"
-              placeholder="Task title"
+          <div className="flex items-start gap-3">
+            <Checkbox
+              checked={task.completed}
+              onCheckedChange={() => onComplete?.()}
+              className="mt-2 h-5 w-5 rounded-full"
             />
+            <div className="flex-1">
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                className={cn(
+                  "text-lg font-medium border-0 px-0 focus-visible:ring-0",
+                  task.completed && "line-through text-muted-foreground"
+                )}
+                placeholder="Task title"
+              />
+            </div>
           </div>
 
+          <div className={cn("space-y-6", task.completed && "opacity-60")}>
           {/* List */}
           {taskList && (
             <div className="flex items-center gap-2 text-sm">
@@ -661,6 +674,8 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
             {task.prioritized_at && (
               <p>Last prioritized: {format(parseUTCTimestamp(task.prioritized_at), 'PPp')}</p>
             )}
+          </div>
+
           </div>
 
           {/* Delete Button */}

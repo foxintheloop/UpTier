@@ -239,6 +239,12 @@ export default function App() {
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     queryClient.invalidateQueries({ queryKey: ['lists'] });
     queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    // Optimistically update selectedTask so detail panel reflects change immediately
+    setSelectedTask(prev => prev ? {
+      ...prev,
+      completed: !prev.completed,
+      completed_at: prev.completed ? null : new Date().toISOString(),
+    } : null);
   }, [selectedTask, queryClient]);
 
   // Handle task deletion
@@ -447,6 +453,7 @@ export default function App() {
             task={selectedTask}
             onClose={() => setSelectedTask(null)}
             onUpdate={(updated) => setSelectedTask(updated)}
+            onComplete={handleToggleComplete}
             onStartFocus={handleStartFocus}
             width={detailPanelWidth}
             onWidthChange={handleDetailWidthChange}
