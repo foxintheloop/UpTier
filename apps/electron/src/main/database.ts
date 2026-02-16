@@ -93,6 +93,21 @@ function openDatabase(dbPath: string): Database.Database {
   // Migrations for existing databases
   runMigrations(database);
 
+  // Seed default list for new databases
+  const listCount = database.prepare(
+    'SELECT COUNT(*) as count FROM lists WHERE is_smart_list = 0'
+  ).get() as { count: number };
+
+  if (listCount.count === 0) {
+    const id = generateId();
+    const now = nowISO();
+    database.prepare(`
+      INSERT INTO lists (id, name, description, icon, color, position, is_smart_list, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
+    `).run(id, 'General', 'Default list for tasks', 'list', '#3b82f6', now, now);
+    dbLog.info('Default General list created for new database');
+  }
+
   return database;
 }
 
@@ -184,5 +199,12 @@ export function generateId(): string {
 }
 
 export function nowISO(): string {
-  return new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const h = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  return `${y}-${m}-${d} ${h}:${min}:${s}`;
 }
