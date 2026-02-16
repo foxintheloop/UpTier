@@ -28,11 +28,13 @@ import { suggestDueDate, suggestBreakdown, getTaskSuggestions } from './ai-sugge
 import type { DueDateSuggestion, BreakdownSuggestion, TaskSuggestions } from './ai-suggestions';
 import { getAtRiskTasks } from './deadline-detector';
 import {
-  getYesterdaySummary,
+  getPreviousDaySummary,
   getAvailableTasks,
-  getTodayOverview,
+  getDayOverview,
   getLastPlanningDate,
   setLastPlanningDate,
+  getPlannedDates,
+  addPlannedDate,
 } from './planning';
 import {
   startFocusSession,
@@ -1319,11 +1321,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('deadlines:getAtRisk', withLogging('deadlines:getAtRisk', () => getAtRiskTasks()));
 
   // Daily Planning
-  ipcMain.handle('planning:getYesterdaySummary', withLogging('planning:getYesterdaySummary', () => getYesterdaySummary()));
-  ipcMain.handle('planning:getAvailableTasks', withLogging('planning:getAvailableTasks', () => getAvailableTasks()));
-  ipcMain.handle('planning:getTodayOverview', withLogging('planning:getTodayOverview', () => getTodayOverview()));
+  ipcMain.handle('planning:getPreviousDaySummary', withLogging('planning:getPreviousDaySummary', (_, targetDate?: string) => getPreviousDaySummary(targetDate)));
+  ipcMain.handle('planning:getAvailableTasks', withLogging('planning:getAvailableTasks', (_, targetDate?: string) => getAvailableTasks(targetDate)));
+  ipcMain.handle('planning:getDayOverview', withLogging('planning:getDayOverview', (_, targetDate?: string) => getDayOverview(targetDate)));
   ipcMain.handle('planning:getLastPlanningDate', withLogging('planning:getLastPlanningDate', () => getLastPlanningDate()));
   ipcMain.handle('planning:setLastPlanningDate', withLogging('planning:setLastPlanningDate', (_, date: string) => setLastPlanningDate(date)));
+  ipcMain.handle('planning:getPlannedDates', withLogging('planning:getPlannedDates', () => getPlannedDates()));
+  ipcMain.handle('planning:addPlannedDate', withLogging('planning:addPlannedDate', (_, date: string) => addPlannedDate(date)));
 
   ipcLog.info('IPC handlers registered', { count: 63 });
 }

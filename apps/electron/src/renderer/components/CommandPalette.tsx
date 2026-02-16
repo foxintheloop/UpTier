@@ -273,13 +273,22 @@ export function CommandPalette({
             </CommandItem>
           )}
           {onPlanDay && (
-            <CommandItem
-              value="Plan My Day"
-              onSelect={() => handleSelect(onPlanDay)}
-            >
-              <Sunrise className="mr-2 h-4 w-4" />
-              <span>Plan My Day</span>
-            </CommandItem>
+            <>
+              <CommandItem
+                value="Plan My Day"
+                onSelect={() => handleSelect(onPlanDay)}
+              >
+                <Sunrise className="mr-2 h-4 w-4" />
+                <span>Plan My Day</span>
+              </CommandItem>
+              <CommandItem
+                value="Plan Another Day"
+                onSelect={() => handleSelect(onPlanDay)}
+              >
+                <CalendarDays className="mr-2 h-4 w-4" />
+                <span>Plan Another Day...</span>
+              </CommandItem>
+            </>
           )}
         </CommandGroup>
       </CommandList>

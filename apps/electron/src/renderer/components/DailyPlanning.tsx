@@ -5,7 +5,7 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
-  Calendar,
+  Calendar as CalendarIcon,
   Clock,
   Plus,
   Minus,
@@ -13,52 +13,88 @@ import {
   Rocket,
   X,
   AlertCircle,
+  ChevronDown,
+  CalendarDays,
+  Check,
+  Save,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, subDays, addDays, parseISO, getDay, isBefore, startOfDay } from 'date-fns';
 import type { TaskWithGoals } from '@uptier/shared';
+
+type PlanningMode = 'single' | 'week';
 
 interface DailyPlanningProps {
   onClose: () => void;
   onComplete: () => void;
+  initialDate?: string;
+  initialMode?: PlanningMode;
 }
 
 type PlanningStep = 'review' | 'build' | 'schedule' | 'confirm';
 
 const STEPS: PlanningStep[] = ['review', 'build', 'schedule', 'confirm'];
 
-const STEP_LABELS: Record<PlanningStep, string> = {
-  review: 'Review Yesterday',
-  build: "Build Today's List",
-  schedule: 'Schedule',
-  confirm: 'Confirm',
-};
+function getTodayStr(): string {
+  return format(new Date(), 'yyyy-MM-dd');
+}
 
-export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
+function getStepLabels(targetDate: string): Record<PlanningStep, string> {
+  const target = parseISO(targetDate);
+  const previous = subDays(target, 1);
+  const todayStr = getTodayStr();
+
+  const previousLabel = format(previous, 'yyyy-MM-dd') === todayStr
+    ? 'Today'
+    : format(previous, 'EEEE');
+  const targetLabel = targetDate === todayStr ? "Today" : format(target, 'EEEE');
+
+  return {
+    review: `Review ${previousLabel}`,
+    build: `Build ${targetLabel}'s List`,
+    schedule: 'Schedule',
+    confirm: 'Confirm',
+  };
+}
+
+export function DailyPlanning({ onClose, onComplete, initialDate, initialMode }: DailyPlanningProps) {
   const [step, setStep] = useState<PlanningStep>('review');
   const [todayTaskIds, setTodayTaskIds] = useState<Set<string>>(new Set());
-  const [scheduledTasks, setScheduledTasks] = useState<Map<string, string>>(new Map()); // taskId -> time
+  const [scheduledTasks, setScheduledTasks] = useState<Map<string, string>>(new Map());
   const queryClient = useQueryClient();
-  const today = format(new Date(), 'yyyy-MM-dd');
+
+  // Date and mode state
+  const [targetDate, setTargetDate] = useState<string>(initialDate || getTodayStr());
+  const [planningMode, setPlanningMode] = useState<PlanningMode>(initialMode || 'single');
+  const [weekDays, setWeekDays] = useState<string[]>([]);
+  const [weekDayIndex, setWeekDayIndex] = useState(0);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [completedWeekDays, setCompletedWeekDays] = useState<Set<string>>(new Set());
+
+  const isTargetToday = targetDate === getTodayStr();
+  const targetDateObj = parseISO(targetDate);
+  const stepLabels = getStepLabels(targetDate);
 
   // Step 1 data
-  const { data: yesterday } = useQuery({
-    queryKey: ['planning', 'yesterday'],
-    queryFn: () => window.electronAPI.planning.getYesterdaySummary(),
+  const { data: previousDaySummary } = useQuery({
+    queryKey: ['planning', 'previousDay', targetDate],
+    queryFn: () => window.electronAPI.planning.getPreviousDaySummary(targetDate),
   });
 
   // Step 2 data
   const { data: availableTasks = [] } = useQuery<TaskWithGoals[]>({
-    queryKey: ['planning', 'available'],
-    queryFn: () => window.electronAPI.planning.getAvailableTasks(),
+    queryKey: ['planning', 'available', targetDate],
+    queryFn: () => window.electronAPI.planning.getAvailableTasks(targetDate),
   });
 
   // Step 2/3 data
-  const { data: todayOverview } = useQuery({
-    queryKey: ['planning', 'today'],
-    queryFn: () => window.electronAPI.planning.getTodayOverview(),
+  const { data: dayOverview } = useQuery({
+    queryKey: ['planning', 'dayOverview', targetDate],
+    queryFn: () => window.electronAPI.planning.getDayOverview(targetDate),
   });
 
   // Settings
@@ -69,12 +105,12 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
 
   const workingHours = (settings as { planning?: { workingHoursPerDay?: number } })?.planning?.workingHoursPerDay ?? 8;
 
-  // Initialize today tasks from existing scheduled tasks
+  // Initialize tasks from existing day overview
   useEffect(() => {
-    if (todayOverview) {
+    if (dayOverview) {
       const ids = new Set<string>();
       const times = new Map<string, string>();
-      for (const t of [...todayOverview.scheduled, ...todayOverview.unscheduled]) {
+      for (const t of [...dayOverview.scheduled, ...dayOverview.unscheduled]) {
         ids.add(t.id);
         if (t.due_time) {
           times.set(t.id, t.due_time);
@@ -83,7 +119,14 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
       setTodayTaskIds(ids);
       setScheduledTasks(times);
     }
-  }, [todayOverview]);
+  }, [dayOverview]);
+
+  // Reset step state when targetDate changes (e.g., via date picker or week tab)
+  useEffect(() => {
+    setStep('review');
+    setTodayTaskIds(new Set());
+    setScheduledTasks(new Map());
+  }, [targetDate]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -102,7 +145,7 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
 
   const isInputFocused = () => {
     const el = document.activeElement;
-    return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+    return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
   };
 
   const stepIndex = STEPS.indexOf(step);
@@ -123,7 +166,7 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
 
   // Step 1 actions
   const handleReschedule = async (taskId: string) => {
-    await window.electronAPI.tasks.update(taskId, { due_date: today });
+    await window.electronAPI.tasks.update(taskId, { due_date: targetDate });
     queryClient.invalidateQueries({ queryKey: ['planning'] });
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
   };
@@ -141,15 +184,15 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
   };
 
   // Step 2 actions
-  const addToToday = async (task: TaskWithGoals) => {
+  const addToDay = async (task: TaskWithGoals) => {
     if (todayTaskIds.has(task.id)) return;
-    await window.electronAPI.tasks.update(task.id, { due_date: today });
+    await window.electronAPI.tasks.update(task.id, { due_date: targetDate });
     setTodayTaskIds((prev) => new Set(prev).add(task.id));
     queryClient.invalidateQueries({ queryKey: ['planning'] });
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
   };
 
-  const removeFromToday = async (task: TaskWithGoals) => {
+  const removeFromDay = async (task: TaskWithGoals) => {
     await window.electronAPI.tasks.update(task.id, { due_date: null });
     setTodayTaskIds((prev) => {
       const next = new Set(prev);
@@ -162,37 +205,68 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
 
   // Step 3 actions
   const handleScheduleTime = async (taskId: string, time: string) => {
-    await window.electronAPI.tasks.update(taskId, { due_date: today, due_time: time });
+    await window.electronAPI.tasks.update(taskId, { due_date: targetDate, due_time: time });
     setScheduledTasks((prev) => new Map(prev).set(taskId, time));
     queryClient.invalidateQueries({ queryKey: ['planning'] });
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
   };
 
   // Computed values
-  const todayTasks = useMemo(() => {
+  const dayTasks = useMemo(() => {
     return availableTasks.filter((t) => todayTaskIds.has(t.id));
   }, [availableTasks, todayTaskIds]);
 
   const totalPlannedMinutes = useMemo(() => {
-    return todayTasks.reduce((sum, t) => sum + (t.estimated_minutes || 0), 0);
-  }, [todayTasks]);
+    return dayTasks.reduce((sum, t) => sum + (t.estimated_minutes || 0), 0);
+  }, [dayTasks]);
 
   const capacityPercent = Math.min(100, (totalPlannedMinutes / (workingHours * 60)) * 100);
 
-  const formatMinutes = (mins: number) => {
-    if (mins >= 60) {
-      const h = Math.floor(mins / 60);
-      const m = mins % 60;
-      return m > 0 ? `${h}h ${m}m` : `${h}h`;
-    }
-    return `${mins}m`;
-  };
-
   // Finish planning
   const handleFinish = async () => {
-    await window.electronAPI.planning.setLastPlanningDate(today);
+    // Record this date as planned
+    await window.electronAPI.planning.addPlannedDate(targetDate);
+
+    // If planning today, also set lastPlanningDate for auto-launch suppression
+    if (isTargetToday) {
+      await window.electronAPI.planning.setLastPlanningDate(targetDate);
+    }
+
+    // In week mode, advance to next day
+    if (planningMode === 'week' && weekDayIndex < weekDays.length - 1) {
+      setCompletedWeekDays((prev) => new Set(prev).add(targetDate));
+      const nextIndex = weekDayIndex + 1;
+      setWeekDayIndex(nextIndex);
+      setTargetDate(weekDays[nextIndex]);
+      return; // Don't close yet — targetDate change triggers state reset via useEffect
+    }
+
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     onComplete();
+  };
+
+  // Date picker handlers
+  const handleSelectDate = (date: string) => {
+    setPlanningMode('single');
+    setWeekDays([]);
+    setWeekDayIndex(0);
+    setCompletedWeekDays(new Set());
+    setTargetDate(date);
+    setDatePickerOpen(false);
+  };
+
+  const handleSelectWeek = (dates: string[]) => {
+    setPlanningMode('week');
+    setWeekDays(dates);
+    setWeekDayIndex(0);
+    setCompletedWeekDays(new Set());
+    setTargetDate(dates[0]);
+    setDatePickerOpen(false);
+  };
+
+  const handleWeekTabClick = (dayIndex: number) => {
+    setWeekDayIndex(dayIndex);
+    setTargetDate(weekDays[dayIndex]);
   };
 
   return (
@@ -201,13 +275,58 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
       <div className="flex items-center justify-between px-8 py-6 border-b border-border">
         <div className="flex items-center gap-3">
           <Sunrise className="h-6 w-6 text-primary" />
-          <h1 className="text-xl font-semibold">Plan My Day</h1>
-          <span className="text-sm text-muted-foreground">{format(new Date(), 'EEEE, MMMM d')}</span>
+          <h1 className="text-xl font-semibold">
+            {isTargetToday ? 'Plan My Day' : `Plan ${format(targetDateObj, 'EEEE')}`}
+          </h1>
+
+          {/* Date picker */}
+          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+            <PopoverTrigger asChild>
+              <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-accent/50 transition-colors">
+                <CalendarIcon className="h-4 w-4" />
+                {format(targetDateObj, 'EEEE, MMMM d')}
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <PlanningDatePicker
+                selectedDate={targetDate}
+                onSelectDate={handleSelectDate}
+                onSelectWeek={handleSelectWeek}
+              />
+            </PopoverContent>
+          </Popover>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-5 w-5" />
         </Button>
       </div>
+
+      {/* Week mode day tabs */}
+      {planningMode === 'week' && weekDays.length > 0 && (
+        <div className="flex items-center justify-center gap-1 py-3 border-b border-border px-8">
+          <span className="text-xs text-muted-foreground mr-3">
+            Day {weekDayIndex + 1} of {weekDays.length}
+          </span>
+          {weekDays.map((day, i) => (
+            <button
+              key={day}
+              onClick={() => handleWeekTabClick(i)}
+              className={cn(
+                'px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1',
+                i === weekDayIndex
+                  ? 'bg-primary text-primary-foreground'
+                  : completedWeekDays.has(day)
+                    ? 'bg-primary/20 text-primary'
+                    : 'bg-secondary text-muted-foreground hover:bg-accent'
+              )}
+            >
+              {completedWeekDays.has(day) && <Check className="h-3 w-3" />}
+              {format(parseISO(day), 'EEE d')}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Step Indicator */}
       <div className="flex items-center justify-center gap-2 py-4">
@@ -227,7 +346,7 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
               <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium border border-current">
                 {i < stepIndex ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
               </span>
-              <span className="hidden sm:inline">{STEP_LABELS[s]}</span>
+              <span className="hidden sm:inline">{stepLabels[s]}</span>
             </button>
             {i < STEPS.length - 1 && (
               <div className={cn('w-8 h-0.5', i < stepIndex ? 'bg-primary' : 'bg-border')} />
@@ -242,39 +361,48 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
           <div className="max-w-3xl mx-auto py-6">
             {step === 'review' && (
               <ReviewStep
-                completed={yesterday?.completed ?? []}
-                incomplete={yesterday?.incomplete ?? []}
+                completed={previousDaySummary?.completed ?? []}
+                incomplete={previousDaySummary?.incomplete ?? []}
                 onReschedule={handleReschedule}
                 onDefer={handleDefer}
                 onDrop={handleDrop}
+                targetDate={targetDate}
+                stepLabel={stepLabels.review}
               />
             )}
             {step === 'build' && (
               <BuildStep
                 availableTasks={availableTasks}
                 todayTaskIds={todayTaskIds}
-                onAddToToday={addToToday}
-                onRemoveFromToday={removeFromToday}
+                onAddToToday={addToDay}
+                onRemoveFromToday={removeFromDay}
                 totalMinutes={totalPlannedMinutes}
                 capacityPercent={capacityPercent}
                 workingHours={workingHours}
+                targetDate={targetDate}
+                stepLabel={stepLabels.build}
               />
             )}
             {step === 'schedule' && (
               <ScheduleStep
-                todayTasks={todayTasks}
+                todayTasks={dayTasks}
                 scheduledTasks={scheduledTasks}
                 onScheduleTime={handleScheduleTime}
                 totalMinutes={totalPlannedMinutes}
                 workingHours={workingHours}
+                targetDate={targetDate}
               />
             )}
             {step === 'confirm' && (
               <ConfirmStep
-                taskCount={todayTasks.length}
+                taskCount={dayTasks.length}
                 totalMinutes={totalPlannedMinutes}
                 workingHours={workingHours}
                 scheduledCount={scheduledTasks.size}
+                isTargetToday={isTargetToday}
+                targetDate={targetDate}
+                isWeekMode={planningMode === 'week'}
+                isLastWeekDay={planningMode === 'week' && weekDayIndex === weekDays.length - 1}
               />
             )}
           </div>
@@ -298,8 +426,13 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
         >
           {stepIndex === STEPS.length - 1 ? (
             <>
-              <Rocket className="h-4 w-4" />
-              Start My Day
+              {isTargetToday ? (
+                <><Rocket className="h-4 w-4" />Start My Day</>
+              ) : planningMode === 'week' && weekDayIndex < weekDays.length - 1 ? (
+                <><ArrowRight className="h-4 w-4" />Next Day</>
+              ) : (
+                <><Save className="h-4 w-4" />Save Plan</>
+              )}
             </>
           ) : (
             <>
@@ -314,7 +447,95 @@ export function DailyPlanning({ onClose, onComplete }: DailyPlanningProps) {
 }
 
 // ============================================================================
-// Step 1: Review Yesterday
+// Date Picker
+// ============================================================================
+
+function PlanningDatePicker({
+  selectedDate,
+  onSelectDate,
+  onSelectWeek,
+}: {
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+  onSelectWeek: (dates: string[]) => void;
+}) {
+  const today = new Date();
+  const todayStr = format(today, 'yyyy-MM-dd');
+  const tomorrowStr = format(addDays(today, 1), 'yyyy-MM-dd');
+
+  // Compute next Monday
+  const dayOfWeek = getDay(today); // 0=Sun, 1=Mon, ...
+  const daysUntilMonday = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 7 : 8 - dayOfWeek;
+  const nextMonday = addDays(today, daysUntilMonday);
+  const nextMondayStr = format(nextMonday, 'yyyy-MM-dd');
+
+  // This week's remaining weekdays (if it's Mon-Thu)
+  const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 4; // Mon-Thu
+  const thisWeekDates = isWeekday
+    ? Array.from({ length: 5 - dayOfWeek }, (_, i) => format(addDays(today, i + 1), 'yyyy-MM-dd'))
+    : null;
+
+  // Next week Mon-Fri
+  const nextWeekDates = Array.from({ length: 5 }, (_, i) =>
+    format(addDays(nextMonday, i), 'yyyy-MM-dd')
+  );
+
+  const presetClass = 'w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-accent transition-colors';
+  const activePresetClass = 'bg-primary/10 text-primary';
+
+  return (
+    <div className="flex">
+      <div className="border-r border-border p-2 space-y-0.5 min-w-[160px]">
+        <button
+          onClick={() => onSelectDate(todayStr)}
+          className={cn(presetClass, selectedDate === todayStr && activePresetClass)}
+        >
+          Today
+        </button>
+        <button
+          onClick={() => onSelectDate(tomorrowStr)}
+          className={cn(presetClass, selectedDate === tomorrowStr && activePresetClass)}
+        >
+          Tomorrow
+        </button>
+        <button
+          onClick={() => onSelectDate(nextMondayStr)}
+          className={cn(presetClass, selectedDate === nextMondayStr && activePresetClass)}
+        >
+          Next Monday
+        </button>
+        <div className="border-t border-border my-1.5" />
+        {thisWeekDates && thisWeekDates.length > 1 && (
+          <button
+            onClick={() => onSelectWeek(thisWeekDates)}
+            className={cn(presetClass, 'flex items-center gap-1.5')}
+          >
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span>Rest of This Week</span>
+          </button>
+        )}
+        <button
+          onClick={() => onSelectWeek(nextWeekDates)}
+          className={cn(presetClass, 'flex items-center gap-1.5')}
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          <span>Next Week</span>
+        </button>
+      </div>
+      <div className="p-2">
+        <Calendar
+          mode="single"
+          selected={parseISO(selectedDate)}
+          onSelect={(date) => date && onSelectDate(format(date, 'yyyy-MM-dd'))}
+          disabled={(date) => isBefore(date, startOfDay(today))}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Step 1: Review Previous Day
 // ============================================================================
 
 function ReviewStep({
@@ -323,18 +544,28 @@ function ReviewStep({
   onReschedule,
   onDefer,
   onDrop,
+  targetDate,
+  stepLabel,
 }: {
   completed: TaskWithGoals[];
   incomplete: TaskWithGoals[];
   onReschedule: (id: string) => void;
   onDefer: (id: string) => void;
   onDrop: (id: string) => void;
+  targetDate: string;
+  stepLabel: string;
 }) {
+  const targetDateObj = parseISO(targetDate);
+  const isTargetToday = targetDate === getTodayStr();
+  const rescheduleLabel = isTargetToday ? 'Today' : format(targetDateObj, 'EEE');
+
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-semibold">Review Yesterday</h2>
-        <p className="text-muted-foreground">Let's see how yesterday went</p>
+        <h2 className="text-2xl font-semibold">{stepLabel}</h2>
+        <p className="text-muted-foreground">
+          Let's see how {format(subDays(targetDateObj, 1), 'EEEE')} went
+        </p>
       </div>
 
       {/* Completed celebration */}
@@ -343,7 +574,7 @@ function ReviewStep({
           <div className="flex items-center gap-2 mb-3">
             <CheckCircle2 className="h-5 w-5 text-green-400" />
             <span className="font-medium text-green-400">
-              You completed {completed.length} task{completed.length !== 1 ? 's' : ''}!
+              {completed.length} task{completed.length !== 1 ? 's' : ''} completed!
             </span>
           </div>
           <div className="space-y-1.5">
@@ -359,7 +590,7 @@ function ReviewStep({
 
       {completed.length === 0 && incomplete.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
-          <p>No tasks from yesterday to review.</p>
+          <p>No tasks to review.</p>
           <p className="text-sm mt-1">Let's plan a productive day!</p>
         </div>
       )}
@@ -392,8 +623,8 @@ function ReviewStep({
                     onClick={() => onReschedule(task.id)}
                     className="h-7 text-xs"
                   >
-                    <Calendar className="h-3 w-3 mr-1" />
-                    Today
+                    <CalendarIcon className="h-3 w-3 mr-1" />
+                    {rescheduleLabel}
                   </Button>
                   <Button
                     variant="ghost"
@@ -422,7 +653,7 @@ function ReviewStep({
 }
 
 // ============================================================================
-// Step 2: Build Today's List
+// Step 2: Build Day's List
 // ============================================================================
 
 function BuildStep({
@@ -433,6 +664,8 @@ function BuildStep({
   totalMinutes,
   capacityPercent,
   workingHours,
+  targetDate,
+  stepLabel,
 }: {
   availableTasks: TaskWithGoals[];
   todayTaskIds: Set<string>;
@@ -441,15 +674,19 @@ function BuildStep({
   totalMinutes: number;
   capacityPercent: number;
   workingHours: number;
+  targetDate: string;
+  stepLabel: string;
 }) {
+  const isTargetToday = targetDate === getTodayStr();
+  const dayLabel = isTargetToday ? 'Today' : format(parseISO(targetDate), 'EEEE');
   const notSelectedTasks = availableTasks.filter((t) => !todayTaskIds.has(t.id));
   const selectedTasks = availableTasks.filter((t) => todayTaskIds.has(t.id));
 
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-semibold">Build Today's List</h2>
-        <p className="text-muted-foreground">Choose which tasks to tackle today</p>
+        <h2 className="text-2xl font-semibold">{stepLabel}</h2>
+        <p className="text-muted-foreground">Choose which tasks to tackle {isTargetToday ? 'today' : `on ${format(parseISO(targetDate), 'EEEE')}`}</p>
       </div>
 
       {/* Capacity meter */}
@@ -508,10 +745,10 @@ function BuildStep({
           </div>
         </div>
 
-        {/* Today's tasks */}
+        {/* Day's tasks */}
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            Today ({selectedTasks.length})
+            {dayLabel} ({selectedTasks.length})
           </h3>
           <div className="space-y-1.5">
             {selectedTasks.length === 0 ? (
@@ -557,13 +794,16 @@ function ScheduleStep({
   onScheduleTime,
   totalMinutes,
   workingHours,
+  targetDate,
 }: {
   todayTasks: TaskWithGoals[];
   scheduledTasks: Map<string, string>;
   onScheduleTime: (taskId: string, time: string) => void;
   totalMinutes: number;
   workingHours: number;
+  targetDate: string;
 }) {
+  const isTargetToday = targetDate === getTodayStr();
   const unscheduled = todayTasks.filter((t) => !scheduledTasks.has(t.id));
   const scheduled = todayTasks
     .filter((t) => scheduledTasks.has(t.id))
@@ -571,17 +811,29 @@ function ScheduleStep({
 
   const estimateFinishTime = () => {
     if (totalMinutes === 0) return null;
-    const now = new Date();
-    const startHour = Math.max(now.getHours(), 6);
+    if (isTargetToday) {
+      const now = new Date();
+      const startHour = Math.max(now.getHours(), 6);
+      const finishTime = new Date();
+      finishTime.setHours(startHour, now.getMinutes() + totalMinutes, 0, 0);
+      return format(finishTime, 'h:mm a');
+    }
+    // For future dates, estimate based on working hours starting at 9 AM
+    const totalHours = totalMinutes / 60;
+    const finishHour = 9 + totalHours;
+    const h = Math.floor(finishHour);
+    const m = Math.round((finishHour - h) * 60);
     const finishTime = new Date();
-    finishTime.setHours(startHour, now.getMinutes() + totalMinutes, 0, 0);
+    finishTime.setHours(h, m, 0, 0);
     return format(finishTime, 'h:mm a');
   };
+
+  const dayLabel = isTargetToday ? 'Your Day' : format(parseISO(targetDate), 'EEEE');
 
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-semibold">Schedule Your Day</h2>
+        <h2 className="text-2xl font-semibold">Schedule {dayLabel}</h2>
         <p className="text-muted-foreground">
           {formatMinutesCompact(totalMinutes)} planned / {workingHours}h available
           {estimateFinishTime() && ` — Finish by ${estimateFinishTime()}`}
@@ -679,27 +931,58 @@ function ConfirmStep({
   totalMinutes,
   workingHours,
   scheduledCount,
+  isTargetToday,
+  targetDate,
+  isWeekMode,
+  isLastWeekDay,
 }: {
   taskCount: number;
   totalMinutes: number;
   workingHours: number;
   scheduledCount: number;
+  isTargetToday: boolean;
+  targetDate: string;
+  isWeekMode: boolean;
+  isLastWeekDay: boolean;
 }) {
   const estimateFinishTime = () => {
     if (totalMinutes === 0) return null;
-    const now = new Date();
-    const startHour = Math.max(now.getHours(), 6);
+    if (isTargetToday) {
+      const now = new Date();
+      const startHour = Math.max(now.getHours(), 6);
+      const finishTime = new Date();
+      finishTime.setHours(startHour, now.getMinutes() + totalMinutes, 0, 0);
+      return format(finishTime, 'h:mm a');
+    }
+    const totalHours = totalMinutes / 60;
+    const finishHour = 9 + totalHours;
+    const h = Math.floor(finishHour);
+    const m = Math.round((finishHour - h) * 60);
     const finishTime = new Date();
-    finishTime.setHours(startHour, now.getMinutes() + totalMinutes, 0, 0);
+    finishTime.setHours(h, m, 0, 0);
     return format(finishTime, 'h:mm a');
   };
+
+  const dayLabel = isTargetToday ? 'your day' : format(parseISO(targetDate), 'EEEE');
+  const buttonLabel = isTargetToday
+    ? 'Start My Day'
+    : isWeekMode && !isLastWeekDay
+      ? 'Next Day'
+      : 'Save Plan';
+  const buttonHint = isTargetToday
+    ? `Press Enter or click "${buttonLabel}" to begin`
+    : isWeekMode && !isLastWeekDay
+      ? `Press Enter to continue to the next day`
+      : `Press Enter or click "${buttonLabel}" to finish`;
 
   return (
     <div className="space-y-8 py-8">
       <div className="text-center space-y-2">
         <CalendarCheck className="h-12 w-12 text-primary mx-auto" />
-        <h2 className="text-2xl font-semibold">Ready to Go!</h2>
-        <p className="text-muted-foreground">Here's your day at a glance</p>
+        <h2 className="text-2xl font-semibold">
+          {isTargetToday ? 'Ready to Go!' : `${format(parseISO(targetDate), 'EEEE')} is Set!`}
+        </h2>
+        <p className="text-muted-foreground">Here's {dayLabel} at a glance</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
@@ -721,7 +1004,7 @@ function ConfirmStep({
 
       <div className="text-center">
         <p className="text-sm text-muted-foreground">
-          Press <kbd className="px-1.5 py-0.5 text-xs bg-secondary border border-border rounded">Enter</kbd> or click "Start My Day" to begin
+          {buttonHint}
         </p>
       </div>
     </div>
@@ -754,7 +1037,7 @@ function TaskCard({ task, action }: { task: TaskWithGoals; action: React.ReactNo
           )}
           {task.due_date && (
             <span className="flex items-center gap-0.5">
-              <Calendar className="h-3 w-3" />
+              <CalendarIcon className="h-3 w-3" />
               {format(new Date(task.due_date + 'T00:00'), 'MMM d')}
             </span>
           )}

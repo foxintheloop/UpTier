@@ -29,7 +29,8 @@ export interface DatabaseSettings {
 }
 
 export interface PlanningSettings {
-  lastPlanningDate: string | null;  // YYYY-MM-DD
+  lastPlanningDate: string | null;  // YYYY-MM-DD (for auto-launch check)
+  plannedDates: string[];           // YYYY-MM-DD strings of planned dates, max 90
   enabled: boolean;                 // auto-launch toggle
   workingHoursPerDay: number;       // default 8
 }
@@ -83,6 +84,7 @@ const store = new Store<SettingsSchema>({
       },
       planning: {
         lastPlanningDate: null,
+        plannedDates: [],
         enabled: true,
         workingHoursPerDay: 8,
       },

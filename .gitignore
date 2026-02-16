@@ -51,3 +51,6 @@ coverage/
 # Misc
 improvements.md
 settings.local.json
+
+# Documentation (local only)
+docs/

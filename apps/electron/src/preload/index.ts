@@ -270,16 +270,20 @@ const electronAPI = {
 
   // Daily Planning
   planning: {
-    getYesterdaySummary: (): Promise<{ completed: TaskWithGoals[]; incomplete: TaskWithGoals[] }> =>
-      ipcRenderer.invoke('planning:getYesterdaySummary'),
-    getAvailableTasks: (): Promise<TaskWithGoals[]> =>
-      ipcRenderer.invoke('planning:getAvailableTasks'),
-    getTodayOverview: (): Promise<{ scheduled: TaskWithGoals[]; unscheduled: TaskWithGoals[]; totalMinutes: number }> =>
-      ipcRenderer.invoke('planning:getTodayOverview'),
+    getPreviousDaySummary: (targetDate?: string): Promise<{ completed: TaskWithGoals[]; incomplete: TaskWithGoals[] }> =>
+      ipcRenderer.invoke('planning:getPreviousDaySummary', targetDate),
+    getAvailableTasks: (targetDate?: string): Promise<TaskWithGoals[]> =>
+      ipcRenderer.invoke('planning:getAvailableTasks', targetDate),
+    getDayOverview: (targetDate?: string): Promise<{ scheduled: TaskWithGoals[]; unscheduled: TaskWithGoals[]; totalMinutes: number }> =>
+      ipcRenderer.invoke('planning:getDayOverview', targetDate),
     getLastPlanningDate: (): Promise<string | null> =>
       ipcRenderer.invoke('planning:getLastPlanningDate'),
     setLastPlanningDate: (date: string): Promise<void> =>
       ipcRenderer.invoke('planning:setLastPlanningDate', date),
+    getPlannedDates: (): Promise<string[]> =>
+      ipcRenderer.invoke('planning:getPlannedDates'),
+    addPlannedDate: (date: string): Promise<void> =>
+      ipcRenderer.invoke('planning:addPlannedDate', date),
   },
 
   // Deadline Detection

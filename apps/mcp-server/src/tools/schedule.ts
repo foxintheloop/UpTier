@@ -45,7 +45,9 @@ function computeEndTime(startTime: string, durationMinutes: number): string {
 // Schemas
 // ============================================================================
 
-const getDailyPlanningContextSchema = z.object({});
+const getDailyPlanningContextSchema = z.object({
+  date: z.string().optional().describe('Target date in YYYY-MM-DD format. Defaults to today if not provided.'),
+});
 
 const getDayScheduleSchema = z.object({
   date: z.string().optional().describe('Date in YYYY-MM-DD format. Defaults to today if not provided.'),
@@ -283,31 +285,36 @@ Before calling this tool:
   },
 
   get_daily_planning_context: {
-    description: `Get full context for daily planning. Returns yesterday's summary (completed + incomplete tasks), today's current schedule, available tasks that could be scheduled, and free time blocks. Use this to help the user plan their day by suggesting which tasks to focus on and when to schedule them.`,
-    inputSchema: getDailyPlanningContextSchema,
-    handler: () => {
-      const db = getDb();
-      const today = getTodayDate();
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
+    description: `Get full context for daily planning. Returns the previous day's summary (completed + incomplete tasks), the target day's current schedule, available tasks that could be scheduled, and free time blocks. Use this to help the user plan their day by suggesting which tasks to focus on and when to schedule them.
 
-      // Yesterday's tasks
-      const yesterdayRows = db.prepare(`
+Optionally pass a date to plan a future day (e.g., tomorrow or next Monday). Defaults to today.`,
+    inputSchema: getDailyPlanningContextSchema,
+    handler: (input: z.infer<typeof getDailyPlanningContextSchema>) => {
+      const db = getDb();
+      const targetDate = input.date || getTodayDate();
+
+      // Compute previous day relative to target
+      const targetDateObj = new Date(targetDate + 'T12:00:00');
+      const previousDateObj = new Date(targetDateObj);
+      previousDateObj.setDate(previousDateObj.getDate() - 1);
+      const previousDateStr = previousDateObj.toISOString().split('T')[0];
+
+      // Previous day's tasks
+      const previousDayRows = db.prepare(`
         SELECT id, title, completed, priority_tier, estimated_minutes
         FROM tasks
         WHERE due_date = ? OR (completed_at >= ? AND completed_at < ?)
         ORDER BY completed DESC, priority_tier ASC NULLS LAST
-      `).all(yesterdayStr, yesterdayStr, today) as Array<{
+      `).all(previousDateStr, previousDateStr, targetDate) as Array<{
         id: string; title: string; completed: number;
         priority_tier: number | null; estimated_minutes: number | null;
       }>;
 
-      const yesterdayCompleted = yesterdayRows.filter((r) => r.completed);
-      const yesterdayIncomplete = yesterdayRows.filter((r) => !r.completed);
+      const previousCompleted = previousDayRows.filter((r) => r.completed);
+      const previousIncomplete = previousDayRows.filter((r) => !r.completed);
 
-      // Today's schedule
-      const todaySchedule = getDaySchedule({ date: today });
+      // Target day's schedule
+      const daySchedule = getDaySchedule({ date: targetDate });
 
       // Available tasks for planning
       const availableRows = db.prepare(`
@@ -320,7 +327,7 @@ Before calling this tool:
             OR (due_date IS NULL AND priority_tier <= 2)
           )
         ORDER BY priority_tier ASC NULLS LAST, due_date ASC NULLS LAST
-      `).all(today) as Array<{
+      `).all(targetDate) as Array<{
         id: string; title: string; due_date: string | null;
         priority_tier: number | null; estimated_minutes: number | null;
         energy_required: string | null;
@@ -328,12 +335,13 @@ Before calling this tool:
 
       return {
         success: true,
-        date: today,
-        yesterday: {
-          completed: yesterdayCompleted,
-          incomplete: yesterdayIncomplete,
+        date: targetDate,
+        previous_day: {
+          date: previousDateStr,
+          completed: previousCompleted,
+          incomplete: previousIncomplete,
         },
-        today: todaySchedule,
+        schedule: daySchedule,
         available_tasks: availableRows,
       };
     },
