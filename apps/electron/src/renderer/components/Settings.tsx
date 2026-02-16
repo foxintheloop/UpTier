@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Monitor, ExternalLink, Bell, BellOff, Volume2, VolumeX, Download, Upload, FileJson, FileSpreadsheet, Check, AlertCircle } from 'lucide-react';
+import { Monitor, ExternalLink, Bell, BellOff, Volume2, VolumeX, Download, Upload, FileJson, FileSpreadsheet, Check, AlertCircle, Target } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -132,6 +132,7 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
     snoozeDurationMinutes: 10,
     soundEnabled: true,
   });
+  const [dailyFocusGoalMinutes, setDailyFocusGoalMinutes] = useState(120);
 
   // Export/Import state
   const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
@@ -149,6 +150,9 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
       if (settings.notifications) {
         setNotifications(settings.notifications);
       }
+      if (settings.analytics) {
+        setDailyFocusGoalMinutes(settings.analytics.dailyFocusGoalMinutes);
+      }
     });
   }, [open]);
 
@@ -162,6 +166,11 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
     const newSettings = { ...notifications, ...updates };
     setNotifications(newSettings);
     await window.electronAPI.settings.set({ notifications: newSettings });
+  };
+
+  const handleFocusGoalChange = async (minutes: number) => {
+    setDailyFocusGoalMinutes(minutes);
+    await window.electronAPI.settings.set({ analytics: { dailyFocusGoalMinutes: minutes } });
   };
 
   const handleExport = async () => {
@@ -365,6 +374,35 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Productivity Section */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Productivity</h4>
+            <div className="rounded-lg border border-border p-4 space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-4 w-4 text-primary" />
+                  <span className="text-sm">Daily focus goal</span>
+                </div>
+                <select
+                  value={dailyFocusGoalMinutes}
+                  onChange={(e) => handleFocusGoalChange(parseInt(e.target.value))}
+                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value={0}>No goal</option>
+                  <option value={30}>30 minutes</option>
+                  <option value={60}>1 hour</option>
+                  <option value={90}>1.5 hours</option>
+                  <option value={120}>2 hours</option>
+                  <option value={180}>3 hours</option>
+                  <option value={240}>4 hours</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Track daily focus time against this target on the Dashboard.
+                </p>
               </div>
             </div>
           </div>

@@ -31,6 +31,7 @@ import {
   Archive,
   Eye,
   Sunrise,
+  BarChart3,
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -57,6 +58,7 @@ interface SidebarProps {
   onSearchClick?: () => void;
   onDatabaseSwitch?: () => void;
   onPlanDay?: () => void;
+  onNewTask?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   width?: number;
@@ -72,6 +74,7 @@ const SMART_LISTS = [
   { id: 'smart:important', name: 'Important', icon: Star, color: '#ef4444' },
   { id: 'smart:planned', name: 'Planned', icon: Calendar, color: '#3b82f6' },
   { id: 'smart:calendar', name: 'Calendar', icon: CalendarDays, color: '#8b5cf6' },
+  { id: 'smart:dashboard', name: 'Dashboard', icon: BarChart3, color: '#10b981' },
   { id: 'smart:completed', name: 'Completed', icon: CheckCircle2, color: '#22c55e' },
 ];
 
@@ -100,7 +103,7 @@ const TIMEFRAME_COLORS: Record<Timeframe, string> = {
   yearly: 'text-red-400',
 };
 
-export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelectGoal, onSettingsClick, onSearchClick, onDatabaseSwitch, onPlanDay, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
+export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelectGoal, onSettingsClick, onSearchClick, onDatabaseSwitch, onPlanDay, onNewTask, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listsExpanded, setListsExpanded] = useState(true);
@@ -153,6 +156,15 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
     staleTime: 60_000,
   });
   const atRiskCount = atRiskTasks.length;
+
+  const { data: focusGoalData } = useQuery<{ todayMinutes: number; dailyGoalMinutes: number; progressPercent: number }>({
+    queryKey: ['analytics', 'focusGoal'],
+    queryFn: async () => {
+      const dashboard = await window.electronAPI.analytics.getDashboard();
+      return dashboard.focusGoal;
+    },
+    staleTime: 30_000,
+  });
 
   const createListMutation = useMutation({
     mutationFn: (name: string) => window.electronAPI.lists.create({ name }),
@@ -394,8 +406,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
       )}
       {/* Header */}
       <div className={cn("border-b border-border", collapsed ? "p-2" : "p-4")}>
-        <div className="flex items-center justify-between">
-          {!collapsed && <h1 className="text-xl font-bold text-primary">UpTier</h1>}
+        <div className="flex items-center justify-end">
           {onToggleCollapse && (
             <button
               onClick={onToggleCollapse}
@@ -409,6 +420,27 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
             </button>
           )}
         </div>
+
+        {/* New Task Button */}
+        {onNewTask && !collapsed && (
+          <button
+            onClick={onNewTask}
+            className="w-full flex items-center gap-2 px-2 py-1.5 mt-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="flex-1 text-left">New Task</span>
+            <kbd className="text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">Ctrl+N</kbd>
+          </button>
+        )}
+        {onNewTask && collapsed && (
+          <button
+            onClick={onNewTask}
+            className="w-full flex items-center justify-center p-2 mt-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            title="New Task (Ctrl+N)"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
 
         {/* Search Trigger */}
         {onSearchClick && !collapsed && (
@@ -520,11 +552,21 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
           {onPlanDay && !collapsed && (
             <button
               onClick={onPlanDay}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary mb-2 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary mb-1 transition-colors"
             >
               <Sunrise className="h-4 w-4" />
               Plan My Day
             </button>
+          )}
+
+          {/* Focus Goal Indicator */}
+          {!collapsed && focusGoalData && focusGoalData.dailyGoalMinutes > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1 mb-2 text-xs text-muted-foreground">
+              <FocusGoalMiniRing percent={focusGoalData.progressPercent} size={16} />
+              <span>
+                {Math.round(focusGoalData.todayMinutes)}m / {focusGoalData.dailyGoalMinutes}m focus
+              </span>
+            </div>
           )}
 
           {/* Smart Lists */}
@@ -986,5 +1028,19 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
         }}
       />
     </div>
+  );
+}
+
+function FocusGoalMiniRing({ percent, size }: { percent: number; size: number }) {
+  const r = (size - 2) / 2;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
+  return (
+    <svg width={size} height={size} className="transform -rotate-90 flex-shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth="2" className="text-muted/20" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth="2"
+        strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
+        className={percent >= 100 ? 'text-green-500' : 'text-primary'} />
+    </svg>
   );
 }

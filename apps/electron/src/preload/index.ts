@@ -22,6 +22,7 @@ import type {
   StartFocusSessionInput,
   CreateSmartListInput,
   UpdateSmartListInput,
+  DashboardData,
 } from '@uptier/shared';
 
 // Types for settings and notifications
@@ -32,9 +33,14 @@ interface NotificationSettings {
   soundEnabled: boolean;
 }
 
+interface AnalyticsSettings {
+  dailyFocusGoalMinutes: number;
+}
+
 interface AppSettings {
   theme: 'dark' | 'light' | 'earth-dark' | 'earth-light' | 'cyberpunk' | 'system';
   notifications: NotificationSettings;
+  analytics: AnalyticsSettings;
 }
 
 interface UpcomingNotification {
@@ -322,6 +328,14 @@ const electronAPI = {
       ipcRenderer.invoke('focus:getAll', taskId),
     delete: (id: string): Promise<boolean> =>
       ipcRenderer.invoke('focus:delete', id),
+  },
+
+  // Analytics
+  analytics: {
+    getDashboard: (): Promise<DashboardData> =>
+      ipcRenderer.invoke('analytics:getDashboard'),
+    checkAllDailyComplete: (): Promise<boolean> =>
+      ipcRenderer.invoke('analytics:checkAllDailyComplete'),
   },
 
   // Logging API for renderer

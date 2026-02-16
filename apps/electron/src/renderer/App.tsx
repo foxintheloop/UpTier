@@ -11,6 +11,9 @@ import { CommandPalette } from './components/CommandPalette';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { DailyPlanning } from './components/DailyPlanning';
 import { FocusTimerOverlay } from './components/FocusTimerOverlay';
+import { ProductivityDashboard } from './components/ProductivityDashboard';
+import { ConfettiCelebration } from './components/ConfettiCelebration';
+import { NewTaskDialog } from './components/NewTaskDialog';
 import { Toaster } from './components/ui/toaster';
 import type { TaskWithGoals, GoalWithProgress, Task, List } from '@uptier/shared';
 
@@ -77,6 +80,8 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [dailyPlanningOpen, setDailyPlanningOpen] = useState(false);
+  const [celebrationMessage, setCelebrationMessage] = useState<string | null>(null);
+  const [newTaskDialogOpen, setNewTaskDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const taskListRef = useRef<TaskListHandle>(null);
 
@@ -169,6 +174,7 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['smartLists'] });
       queryClient.invalidateQueries({ queryKey: ['database-profiles'] });
       queryClient.invalidateQueries({ queryKey: ['database-active'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
     });
 
     return unsubscribe;
@@ -188,9 +194,22 @@ export default function App() {
       await window.electronAPI.tasks.uncomplete(selectedTask.id);
     } else {
       await window.electronAPI.tasks.complete(selectedTask.id);
+      // Check for celebrations
+      try {
+        const allComplete = await window.electronAPI.analytics.checkAllDailyComplete();
+        if (allComplete) {
+          setCelebrationMessage('All daily tasks complete!');
+        } else {
+          const dashboard = await window.electronAPI.analytics.getDashboard();
+          if (dashboard.streak.milestoneReached) {
+            setCelebrationMessage(`${dashboard.streak.milestoneReached}-day streak!`);
+          }
+        }
+      } catch { /* ignore analytics errors */ }
     }
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     queryClient.invalidateQueries({ queryKey: ['lists'] });
+    queryClient.invalidateQueries({ queryKey: ['analytics'] });
   }, [selectedTask, queryClient]);
 
   // Handle task deletion
@@ -247,10 +266,10 @@ export default function App() {
       const target = e.target as HTMLElement;
       const isInputActive = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
-      // Ctrl/Cmd + N: Focus quick add
+      // Ctrl/Cmd + N: New task
       if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
-        taskListRef.current?.focusQuickAdd();
+        setNewTaskDialogOpen(true);
         return;
       }
 
@@ -345,6 +364,7 @@ export default function App() {
         onSettingsClick={() => setSettingsOpen(true)}
         onSearchClick={() => setCommandPaletteOpen(true)}
         onPlanDay={() => setDailyPlanningOpen(true)}
+        onNewTask={() => setNewTaskDialogOpen(true)}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         width={sidebarWidth}
@@ -363,6 +383,8 @@ export default function App() {
               }}
               selectedTaskId={selectedTask?.id}
             />
+          ) : selectedListId === 'smart:dashboard' ? (
+            <ProductivityDashboard />
           ) : selectedListId ? (
             <TaskList
               ref={taskListRef}
@@ -450,6 +472,20 @@ export default function App() {
       {/* Keyboard Shortcuts */}
       <KeyboardShortcuts open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
+      {/* New Task Dialog */}
+      <NewTaskDialog
+        open={newTaskDialogOpen}
+        onOpenChange={setNewTaskDialogOpen}
+        defaultListId={selectedListId}
+        onTaskCreated={(listId) => {
+          if (listId !== selectedListId) {
+            setSelectedListId(listId);
+            setSelectedTask(null);
+            setSelectedGoal(null);
+          }
+        }}
+      />
+
       {/* Toast notifications */}
       <Toaster />
 
@@ -475,6 +511,13 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Celebration Confetti */}
+      <ConfettiCelebration
+        active={celebrationMessage !== null}
+        message={celebrationMessage ?? undefined}
+        onComplete={() => setCelebrationMessage(null)}
+      />
     </div>
   );
 }

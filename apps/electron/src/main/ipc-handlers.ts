@@ -43,6 +43,7 @@ import {
   getFocusSessions,
   deleteFocusSession,
 } from './focus';
+import { getDashboardData, checkAllDailyTasksCompleted } from './analytics';
 import type {
   List,
   ListWithCount,
@@ -1329,5 +1330,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('planning:getPlannedDates', withLogging('planning:getPlannedDates', () => getPlannedDates()));
   ipcMain.handle('planning:addPlannedDate', withLogging('planning:addPlannedDate', (_, date: string) => addPlannedDate(date)));
 
-  ipcLog.info('IPC handlers registered', { count: 63 });
+  // Analytics
+  ipcMain.handle('analytics:getDashboard', withLogging('analytics:getDashboard', () => getDashboardData()));
+  ipcMain.handle('analytics:checkAllDailyComplete', withLogging('analytics:checkAllDailyComplete', () => checkAllDailyTasksCompleted()));
+
+  ipcLog.info('IPC handlers registered', { count: 65 });
 }

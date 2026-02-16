@@ -35,11 +35,16 @@ export interface PlanningSettings {
   workingHoursPerDay: number;       // default 8
 }
 
+export interface AnalyticsSettings {
+  dailyFocusGoalMinutes: number;
+}
+
 export interface AppSettings {
   theme: ThemeMode;
   notifications: NotificationSettings;
   databases: DatabaseSettings;
   planning: PlanningSettings;
+  analytics: AnalyticsSettings;
 }
 
 interface SettingsSchema {
@@ -87,6 +92,9 @@ const store = new Store<SettingsSchema>({
         plannedDates: [],
         enabled: true,
         workingHoursPerDay: 8,
+      },
+      analytics: {
+        dailyFocusGoalMinutes: 120,
       },
     },
   },
