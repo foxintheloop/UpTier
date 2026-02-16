@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Sunrise,
@@ -105,8 +105,20 @@ export function DailyPlanning({ onClose, onComplete, initialDate, initialMode }:
 
   const workingHours = (settings as { planning?: { workingHoursPerDay?: number } })?.planning?.workingHoursPerDay ?? 8;
 
-  // Initialize tasks from existing day overview
+  // Combined effect: reset on targetDate change, initialize from dayOverview
+  const prevTargetDate = useRef(targetDate);
+
   useEffect(() => {
+    // If targetDate changed, reset state and wait for new dayOverview
+    if (prevTargetDate.current !== targetDate) {
+      prevTargetDate.current = targetDate;
+      setStep('review');
+      setTodayTaskIds(new Set());
+      setScheduledTasks(new Map());
+      return;
+    }
+
+    // Initialize from dayOverview when it arrives
     if (dayOverview) {
       const ids = new Set<string>();
       const times = new Map<string, string>();
@@ -119,14 +131,7 @@ export function DailyPlanning({ onClose, onComplete, initialDate, initialMode }:
       setTodayTaskIds(ids);
       setScheduledTasks(times);
     }
-  }, [dayOverview]);
-
-  // Reset step state when targetDate changes (e.g., via date picker or week tab)
-  useEffect(() => {
-    setStep('review');
-    setTodayTaskIds(new Set());
-    setScheduledTasks(new Map());
-  }, [targetDate]);
+  }, [targetDate, dayOverview]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -211,10 +216,21 @@ export function DailyPlanning({ onClose, onComplete, initialDate, initialMode }:
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
   };
 
-  // Computed values
+  // Merge availableTasks and dayOverview so tasks already on the day always appear
+  const allKnownTasks = useMemo(() => {
+    const taskMap = new Map<string, TaskWithGoals>();
+    for (const t of availableTasks) taskMap.set(t.id, t);
+    if (dayOverview) {
+      for (const t of [...dayOverview.scheduled, ...dayOverview.unscheduled]) {
+        if (!taskMap.has(t.id)) taskMap.set(t.id, t);
+      }
+    }
+    return Array.from(taskMap.values());
+  }, [availableTasks, dayOverview]);
+
   const dayTasks = useMemo(() => {
-    return availableTasks.filter((t) => todayTaskIds.has(t.id));
-  }, [availableTasks, todayTaskIds]);
+    return allKnownTasks.filter((t) => todayTaskIds.has(t.id));
+  }, [allKnownTasks, todayTaskIds]);
 
   const totalPlannedMinutes = useMemo(() => {
     return dayTasks.reduce((sum, t) => sum + (t.estimated_minutes || 0), 0);
@@ -372,7 +388,7 @@ export function DailyPlanning({ onClose, onComplete, initialDate, initialMode }:
             )}
             {step === 'build' && (
               <BuildStep
-                availableTasks={availableTasks}
+                availableTasks={allKnownTasks}
                 todayTaskIds={todayTaskIds}
                 onAddToToday={addToDay}
                 onRemoveFromToday={removeFromDay}

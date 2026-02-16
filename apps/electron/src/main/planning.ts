@@ -40,10 +40,10 @@ function enrichTask(task: Task): TaskWithGoals {
   const db = getDb();
 
   const goals = db.prepare(`
-    SELECT g.id as goal_id, g.name as goal_name, tg.strength
+    SELECT g.id as goal_id, g.name as goal_name, tg.alignment_strength
     FROM task_goals tg JOIN goals g ON tg.goal_id = g.id
     WHERE tg.task_id = ?
-  `).all(task.id) as Array<{ goal_id: string; goal_name: string; strength: number }>;
+  `).all(task.id) as Array<{ goal_id: string; goal_name: string; alignment_strength: number }>;
 
   const tags = db.prepare(`
     SELECT t.id, t.name, t.color
