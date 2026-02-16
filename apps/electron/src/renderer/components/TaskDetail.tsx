@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
+import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, LayoutList, Loader2, Check, Trash2, Play, ChevronDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -12,7 +12,7 @@ import { GoalPicker } from './GoalPicker';
 import { SubtaskList } from './SubtaskList';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '@/lib/utils';
-import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
+import type { TaskWithGoals, UpdateTaskInput, ListWithCount } from '@uptier/shared';
 
 const FOCUS_DURATIONS = [
   { value: 30, label: '30 min' },
@@ -70,6 +70,12 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
   const [loadingDueDate, setLoadingDueDate] = useState(false);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
   const queryClient = useQueryClient();
+
+  const { data: lists = [] } = useQuery<ListWithCount[]>({
+    queryKey: ['lists'],
+    queryFn: () => window.electronAPI.lists.getAll(),
+  });
+  const taskList = lists.find(l => l.id === task.list_id);
 
   useEffect(() => {
     setTitle(task.title);
@@ -306,6 +312,19 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
               placeholder="Task title"
             />
           </div>
+
+          {/* List */}
+          {taskList && (
+            <div className="flex items-center gap-2 text-sm">
+              <LayoutList className="h-4 w-4" />
+              <span className="font-medium">List</span>
+              <div
+                className="h-2.5 w-2.5 rounded-full flex-shrink-0 ml-1"
+                style={{ backgroundColor: taskList.color }}
+              />
+              <span className="text-muted-foreground">{taskList.name}</span>
+            </div>
+          )}
 
           {/* Priority Section */}
           {task.priority_tier && (
