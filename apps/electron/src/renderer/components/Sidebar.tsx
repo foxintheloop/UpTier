@@ -38,6 +38,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { cn } from '@/lib/utils';
 import { SmartListEditor } from './SmartListEditor';
+import { useFeatures } from '../hooks/useFeatures';
 import type { ListWithCount, GoalWithProgress, Timeframe, List as ListType } from '@uptier/shared';
 
 interface DatabaseProfile {
@@ -124,6 +125,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
   const [filterMenuOpen, setFilterMenuOpen] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
+  const features = useFeatures();
 
   const { data: lists = [] } = useQuery<ListWithCount[]>({
     queryKey: ['lists'],
@@ -464,7 +466,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
         )}
 
         {/* Database Switcher */}
-        {!collapsed && (
+        {features.databaseProfiles && !collapsed && (
           <div className="db-switcher relative mt-2">
             <button
               onClick={() => setDbDropdownOpen(!dbDropdownOpen)}
@@ -549,7 +551,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
       <ScrollArea className="flex-1">
         <div className={cn("p-2", collapsed && "px-1")}>
           {/* Plan My Day */}
-          {onPlanDay && !collapsed && (
+          {features.dailyPlanning && onPlanDay && !collapsed && (
             <button
               onClick={onPlanDay}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm bg-primary/10 hover:bg-primary/20 text-primary mb-1 transition-colors"
@@ -560,7 +562,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
           )}
 
           {/* Focus Goal Indicator */}
-          {!collapsed && focusGoalData && focusGoalData.dailyGoalMinutes > 0 && (
+          {features.focusTimer && !collapsed && focusGoalData && focusGoalData.dailyGoalMinutes > 0 && (
             <div className="flex items-center gap-2 px-3 py-1 mb-2 text-xs text-muted-foreground">
               <FocusGoalMiniRing percent={focusGoalData.progressPercent} size={16} />
               <span>
@@ -571,8 +573,12 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
 
           {/* Smart Lists */}
           <div className="mb-4">
-            {SMART_LISTS.map((smartList) => {
-              const showBadge = !collapsed && atRiskCount > 0 &&
+            {SMART_LISTS.filter((sl) => {
+              if (sl.id === 'smart:calendar') return features.calendarView;
+              if (sl.id === 'smart:dashboard') return features.dashboard;
+              return true;
+            }).map((smartList) => {
+              const showBadge = !collapsed && features.deadlineAlerts && atRiskCount > 0 &&
                 (smartList.id === 'smart:my_day' || smartList.id === 'smart:planned');
               return (
                 <button
@@ -603,7 +609,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
           </div>
 
           {/* Custom Smart Lists (Filters) */}
-          {(customSmartLists.length > 0 || !collapsed) && (
+          {features.customSmartFilters && (customSmartLists.length > 0 || !collapsed) && (
             <>
               <div className="border-t border-border my-2" />
               <div className="mb-4">
@@ -864,10 +870,9 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
             )}
           </div>
 
-          {/* Separator */}
-          <div className="border-t border-border my-2" />
-
           {/* Goals */}
+          {features.goalsSystem && (<>
+          <div className="border-t border-border my-2" />
           <div className="mb-4">
             {!collapsed && (
               <button
@@ -998,6 +1003,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
               </div>
             )}
           </div>
+          </>)}
         </div>
       </ScrollArea>
 

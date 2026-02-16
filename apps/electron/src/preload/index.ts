@@ -37,10 +37,35 @@ interface AnalyticsSettings {
   dailyFocusGoalMinutes: number;
 }
 
+interface FeatureFlags {
+  priorityTiers: boolean;
+  focusTimer: boolean;
+  calendarView: boolean;
+  customSmartFilters: boolean;
+  notifications: boolean;
+  exportImport: boolean;
+  goalsSystem: boolean;
+  dashboard: boolean;
+  dailyPlanning: boolean;
+  aiSuggestions: boolean;
+  deadlineAlerts: boolean;
+  streaksCelebrations: boolean;
+  databaseProfiles: boolean;
+}
+
+type FeatureTier = 'basic' | 'intermediate' | 'advanced' | 'custom';
+
+interface OnboardingSettings {
+  completed: boolean;
+  tier: FeatureTier;
+  features: FeatureFlags;
+}
+
 interface AppSettings {
   theme: 'dark' | 'light' | 'earth-dark' | 'earth-light' | 'cyberpunk' | 'system';
   notifications: NotificationSettings;
   analytics: AnalyticsSettings;
+  onboarding: OnboardingSettings;
 }
 
 interface UpcomingNotification {

@@ -14,7 +14,9 @@ import { FocusTimerOverlay } from './components/FocusTimerOverlay';
 import { ProductivityDashboard } from './components/ProductivityDashboard';
 import { ConfettiCelebration } from './components/ConfettiCelebration';
 import { NewTaskDialog } from './components/NewTaskDialog';
+import { OnboardingWizard } from './components/OnboardingWizard';
 import { Toaster } from './components/ui/toaster';
+import { useFeatures, useOnboarding } from './hooks/useFeatures';
 import type { TaskWithGoals, GoalWithProgress, Task, List } from '@uptier/shared';
 
 // Default focus duration in minutes
@@ -82,7 +84,10 @@ export default function App() {
   const [dailyPlanningOpen, setDailyPlanningOpen] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState<string | null>(null);
   const [newTaskDialogOpen, setNewTaskDialogOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
+  const features = useFeatures();
+  const { completed: onboardingCompleted } = useOnboarding();
   const taskListRef = useRef<TaskListHandle>(null);
 
   // Fetch custom smart lists to detect filter views
@@ -118,6 +123,30 @@ export default function App() {
     }
   }, [windowWidth, sidebarCollapsed]);
 
+  // Show onboarding for new users
+  useEffect(() => {
+    if (showOnboarding === null) {
+      setShowOnboarding(!onboardingCompleted);
+    }
+  }, [onboardingCompleted, showOnboarding]);
+
+  // Navigate away from disabled feature views
+  useEffect(() => {
+    if (selectedListId === 'smart:calendar' && !features.calendarView) {
+      setSelectedListId('smart:my_day');
+    }
+    if (selectedListId === 'smart:dashboard' && !features.dashboard) {
+      setSelectedListId('smart:my_day');
+    }
+  }, [features, selectedListId]);
+
+  // Clear goal selection if goals feature disabled
+  useEffect(() => {
+    if (!features.goalsSystem && selectedGoal) {
+      setSelectedGoal(null);
+    }
+  }, [features.goalsSystem, selectedGoal]);
+
   // Load and apply theme on mount
   useEffect(() => {
     window.electronAPI.settings.get().then((settings) => {
@@ -147,7 +176,7 @@ export default function App() {
       try {
         const settings = await window.electronAPI.settings.get();
         const planningEnabled = (settings as { planning?: { enabled?: boolean } })?.planning?.enabled ?? true;
-        if (!planningEnabled) return;
+        if (!planningEnabled || !features.dailyPlanning) return;
 
         const lastDate = await window.electronAPI.planning.getLastPlanningDate();
         const today = new Date().toISOString().split('T')[0];
@@ -160,7 +189,7 @@ export default function App() {
       }
     };
     checkPlanning();
-  }, []);
+  }, [features.dailyPlanning]);
 
   // Listen for database changes from MCP server
   useEffect(() => {
@@ -194,8 +223,8 @@ export default function App() {
       await window.electronAPI.tasks.uncomplete(selectedTask.id);
     } else {
       await window.electronAPI.tasks.complete(selectedTask.id);
-      // Check for celebrations
-      try {
+      // Check for celebrations (only if streaks feature enabled)
+      if (features.streaksCelebrations) try {
         const allComplete = await window.electronAPI.analytics.checkAllDailyComplete();
         if (allComplete) {
           setCelebrationMessage('All daily tasks complete!');
@@ -346,6 +375,11 @@ export default function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [selectedTask, getCurrentTaskIndex, handleToggleComplete, handleDeleteTask]);
 
+  // Show onboarding wizard for new users
+  if (showOnboarding) {
+    return <OnboardingWizard onComplete={() => setShowOnboarding(false)} />;
+  }
+
   return (
     <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar */}
@@ -375,7 +409,7 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden">
         {/* Task List */}
         <div className={`flex-1 overflow-hidden ${selectedTask || selectedGoal ? 'border-r border-border' : ''}`}>
-          {selectedListId === 'smart:calendar' ? (
+          {selectedListId === 'smart:calendar' && features.calendarView ? (
             <CalendarView
               onSelectTask={(task) => {
                 setSelectedTask(task);
@@ -383,7 +417,7 @@ export default function App() {
               }}
               selectedTaskId={selectedTask?.id}
             />
-          ) : selectedListId === 'smart:dashboard' ? (
+          ) : selectedListId === 'smart:dashboard' && features.dashboard ? (
             <ProductivityDashboard />
           ) : selectedListId ? (
             <TaskList
@@ -490,7 +524,7 @@ export default function App() {
       <Toaster />
 
       {/* Focus Timer Overlay */}
-      {activeFocusSession && (
+      {activeFocusSession && features.focusTimer && (
         <FocusTimerOverlay
           task={activeFocusSession.task}
           durationMinutes={activeFocusSession.durationMinutes}
@@ -500,7 +534,7 @@ export default function App() {
       )}
 
       {/* Daily Planning Overlay */}
-      {dailyPlanningOpen && (
+      {dailyPlanningOpen && features.dailyPlanning && (
         <DailyPlanning
           onClose={() => setDailyPlanningOpen(false)}
           onComplete={() => {
@@ -513,11 +547,11 @@ export default function App() {
       )}
 
       {/* Celebration Confetti */}
-      <ConfettiCelebration
+      {features.streaksCelebrations && <ConfettiCelebration
         active={celebrationMessage !== null}
         message={celebrationMessage ?? undefined}
         onComplete={() => setCelebrationMessage(null)}
-      />
+      />}
     </div>
   );
 }

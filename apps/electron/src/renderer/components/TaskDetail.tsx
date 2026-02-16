@@ -12,6 +12,7 @@ import { GoalPicker } from './GoalPicker';
 import { SubtaskList } from './SubtaskList';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '@/lib/utils';
+import { useFeatures } from '../hooks/useFeatures';
 import type { TaskWithGoals, UpdateTaskInput, ListWithCount } from '@uptier/shared';
 
 const FOCUS_DURATIONS = [
@@ -58,6 +59,7 @@ interface BreakdownSuggestion {
 }
 
 export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWidthChange }: TaskDetailProps) {
+  const features = useFeatures();
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes || '');
   const [showDueDateSuggestion, setShowDueDateSuggestion] = useState(false);
@@ -236,7 +238,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
         <h3 className="font-medium">Task Details</h3>
         <div className="flex items-center gap-2">
           {/* Focus Button with Duration Picker */}
-          {!task.completed && onStartFocus && (
+          {features.focusTimer && !task.completed && onStartFocus && (
             <Popover open={focusPopoverOpen} onOpenChange={setFocusPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1">
@@ -327,7 +329,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
           )}
 
           {/* Priority Section */}
-          {task.priority_tier && (
+          {features.priorityTiers && task.priority_tier && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <AlertCircle className="h-4 w-4" />
@@ -443,7 +445,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
           </div>
 
           {/* Goals */}
-          <div className="space-y-2">
+          {features.goalsSystem && <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Target className="h-4 w-4" />
               Goals
@@ -468,7 +470,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
                 onGoalsChange={handleGoalsChange}
               />
             </div>
-          </div>
+          </div>}
 
           {/* Tags */}
           <div className="space-y-2">
@@ -511,7 +513,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
           </div>
 
           {/* AI Suggestions */}
-          <div className="space-y-3">
+          {features.aiSuggestions && <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Sparkles className="h-4 w-4 text-primary" />
               Smart Suggestions
@@ -650,7 +652,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Metadata */}
           <div className="text-xs text-muted-foreground space-y-1 pt-4 border-t border-border">

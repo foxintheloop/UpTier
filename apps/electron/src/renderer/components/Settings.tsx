@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Monitor, ExternalLink, Bell, BellOff, Volume2, VolumeX, Download, Upload, FileJson, FileSpreadsheet, Check, AlertCircle, Target } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Monitor, ExternalLink, Bell, BellOff, Volume2, VolumeX, Download, Upload, FileJson, FileSpreadsheet, Check, AlertCircle, Target, Layers, Sparkles, Rocket } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -8,6 +9,14 @@ import {
 } from './ui/dialog';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
+import {
+  useFeatures,
+  FEATURE_PRESETS,
+  FEATURE_DEFINITIONS,
+  deriveTier,
+  type FeatureFlags,
+  type FeatureTier,
+} from '../hooks/useFeatures';
 
 type ThemeMode = 'dark' | 'light' | 'earth-dark' | 'earth-light' | 'cyberpunk' | 'system';
 
@@ -125,6 +134,10 @@ interface ImportPreviewData {
 }
 
 export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
+  const queryClient = useQueryClient();
+  const features = useFeatures();
+  const [currentFeatures, setCurrentFeatures] = useState<FeatureFlags>(features);
+  const [currentTier, setCurrentTier] = useState<FeatureTier>(() => deriveTier(features));
   const [currentTheme, setCurrentTheme] = useState<ThemeMode>('dark');
   const [notifications, setNotifications] = useState<NotificationSettings>({
     enabled: true,
@@ -153,6 +166,10 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
       if (settings.analytics) {
         setDailyFocusGoalMinutes(settings.analytics.dailyFocusGoalMinutes);
       }
+      if (settings.onboarding?.features) {
+        setCurrentFeatures(settings.onboarding.features);
+        setCurrentTier(deriveTier(settings.onboarding.features));
+      }
     });
   }, [open]);
 
@@ -171,6 +188,27 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
   const handleFocusGoalChange = async (minutes: number) => {
     setDailyFocusGoalMinutes(minutes);
     await window.electronAPI.settings.set({ analytics: { dailyFocusGoalMinutes: minutes } });
+  };
+
+  const handleFeatureToggle = async (key: keyof FeatureFlags, checked: boolean) => {
+    const newFeatures = { ...currentFeatures, [key]: checked };
+    const newTier = deriveTier(newFeatures);
+    setCurrentFeatures(newFeatures);
+    setCurrentTier(newTier);
+    await window.electronAPI.settings.set({
+      onboarding: { completed: true, tier: newTier, features: newFeatures },
+    });
+    queryClient.invalidateQueries({ queryKey: ['settings'] });
+  };
+
+  const handleTierChange = async (tier: Exclude<FeatureTier, 'custom'>) => {
+    const newFeatures = FEATURE_PRESETS[tier];
+    setCurrentFeatures(newFeatures);
+    setCurrentTier(tier);
+    await window.electronAPI.settings.set({
+      onboarding: { completed: true, tier, features: newFeatures },
+    });
+    queryClient.invalidateQueries({ queryKey: ['settings'] });
   };
 
   const handleExport = async () => {
@@ -289,8 +327,69 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
             </div>
           </div>
 
-          {/* Notifications Section */}
+          {/* Features Section */}
           <div className="space-y-3">
+            <h4 className="text-sm font-medium">Features</h4>
+            <div className="rounded-lg border border-border p-4 space-y-4">
+              {/* Preset buttons */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Preset</span>
+                  <span className="text-xs font-medium capitalize text-muted-foreground">{currentTier}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { tier: 'basic' as const, icon: Layers, color: 'text-blue-400' },
+                    { tier: 'intermediate' as const, icon: Sparkles, color: 'text-amber-400' },
+                    { tier: 'advanced' as const, icon: Rocket, color: 'text-emerald-400' },
+                  ]).map(({ tier, icon: Icon, color }) => (
+                    <button
+                      key={tier}
+                      onClick={() => handleTierChange(tier)}
+                      className={cn(
+                        'flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs rounded-md border transition-colors capitalize',
+                        currentTier === tier
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-input hover:bg-accent'
+                      )}
+                    >
+                      <Icon className={cn('h-3 w-3', currentTier === tier ? 'text-primary' : color)} />
+                      {tier}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Individual toggles */}
+              <div className="space-y-2.5 pt-2 border-t border-border">
+                {FEATURE_DEFINITIONS.map(({ key, label, description }) => (
+                  <div key={key} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-sm">{label}</span>
+                      <p className="text-xs text-muted-foreground truncate">{description}</p>
+                    </div>
+                    <button
+                      onClick={() => handleFeatureToggle(key, !currentFeatures[key])}
+                      className={cn(
+                        'relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors',
+                        currentFeatures[key] ? 'bg-primary' : 'bg-muted'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                          currentFeatures[key] ? 'translate-x-4' : 'translate-x-1'
+                        )}
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Notifications Section */}
+          {features.notifications && <div className="space-y-3">
             <h4 className="text-sm font-medium">Notifications</h4>
             <div className="rounded-lg border border-border p-4 space-y-4">
               {/* Enable/Disable Toggle */}
@@ -376,10 +475,10 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
                 </select>
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* Productivity Section */}
-          <div className="space-y-3">
+          {features.focusTimer && <div className="space-y-3">
             <h4 className="text-sm font-medium">Productivity</h4>
             <div className="rounded-lg border border-border p-4 space-y-4">
               <div className="space-y-1.5">
@@ -405,10 +504,10 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
                 </p>
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* Data Section */}
-          <div className="space-y-3">
+          {features.exportImport && <div className="space-y-3">
             <h4 className="text-sm font-medium">Data</h4>
             <div className="rounded-lg border border-border p-4 space-y-4">
               {/* Export */}
@@ -552,7 +651,7 @@ export function Settings({ open, onOpenChange, onThemeChange }: SettingsProps) {
                 )}
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* About Section */}
           <div className="space-y-3">

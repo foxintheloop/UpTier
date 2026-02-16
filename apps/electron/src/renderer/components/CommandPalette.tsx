@@ -30,6 +30,7 @@ import {
   CommandSeparator,
 } from './ui/command';
 import type { ListWithCount, GoalWithProgress, TaskWithGoals } from '@uptier/shared';
+import { useFeatures } from '../hooks/useFeatures';
 
 // ============================================================================
 // Types
@@ -84,6 +85,7 @@ export function CommandPalette({
   onPlanDay,
 }: CommandPaletteProps) {
   const [search, setSearch] = useState('');
+  const features = useFeatures();
 
   // Reset search when closing
   useEffect(() => {
@@ -150,7 +152,11 @@ export function CommandPalette({
 
         {/* Smart lists */}
         <CommandGroup heading="Views">
-          {SMART_LISTS.map((list) => {
+          {SMART_LISTS.filter((sl) => {
+            if (sl.id === 'smart:calendar') return features.calendarView;
+            if (sl.id === 'smart:dashboard') return features.dashboard;
+            return true;
+          }).map((list) => {
             const Icon = list.icon;
             return (
               <CommandItem
@@ -185,7 +191,7 @@ export function CommandPalette({
         )}
 
         {/* Goals */}
-        {goals.length > 0 && (
+        {features.goalsSystem && goals.length > 0 && (
           <CommandGroup heading="Goals">
             {goals.map((goal) => (
               <CommandItem
@@ -272,7 +278,7 @@ export function CommandPalette({
               <span>Keyboard Shortcuts</span>
             </CommandItem>
           )}
-          {onPlanDay && (
+          {features.dailyPlanning && onPlanDay && (
             <>
               <CommandItem
                 value="Plan My Day"
