@@ -441,42 +441,22 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
           )}
 
           {/* Scores */}
-          {(task.effort_score || task.impact_score || task.urgency_score || task.importance_score) && (
-            <div className="space-y-2">
+          {features.priorityTiers && (
+            <div className="space-y-3">
               <div className="text-sm font-medium">Scores</div>
-              <div className="grid grid-cols-2 gap-2">
-                {task.effort_score && (
-                  <ScoreItem
-                    icon={Zap}
-                    label="Effort"
-                    value={task.effort_score}
-                    description={PRIORITY_SCALES.effort[task.effort_score as keyof typeof PRIORITY_SCALES.effort]?.label}
-                  />
-                )}
-                {task.impact_score && (
-                  <ScoreItem
-                    icon={Gem}
-                    label="Impact"
-                    value={task.impact_score}
-                    description={PRIORITY_SCALES.impact[task.impact_score as keyof typeof PRIORITY_SCALES.impact]?.label}
-                  />
-                )}
-                {task.urgency_score && (
-                  <ScoreItem
-                    icon={AlertCircle}
-                    label="Urgency"
-                    value={task.urgency_score}
-                    description={PRIORITY_SCALES.urgency[task.urgency_score as keyof typeof PRIORITY_SCALES.urgency]?.label}
-                  />
-                )}
-                {task.importance_score && (
-                  <ScoreItem
-                    icon={Target}
-                    label="Importance"
-                    value={task.importance_score}
-                    description={PRIORITY_SCALES.importance[task.importance_score as keyof typeof PRIORITY_SCALES.importance]?.label}
-                  />
-                )}
+              <div className="grid grid-cols-2 gap-3">
+                <ScoreSelector icon={Zap} label="Effort" value={task.effort_score}
+                  scale={PRIORITY_SCALES.effort}
+                  onChange={(v) => updateMutation.mutate({ effort_score: v })} />
+                <ScoreSelector icon={Gem} label="Impact" value={task.impact_score}
+                  scale={PRIORITY_SCALES.impact}
+                  onChange={(v) => updateMutation.mutate({ impact_score: v })} />
+                <ScoreSelector icon={AlertCircle} label="Urgency" value={task.urgency_score}
+                  scale={PRIORITY_SCALES.urgency}
+                  onChange={(v) => updateMutation.mutate({ urgency_score: v })} />
+                <ScoreSelector icon={Target} label="Importance" value={task.importance_score}
+                  scale={PRIORITY_SCALES.importance}
+                  onChange={(v) => updateMutation.mutate({ importance_score: v })} />
               </div>
             </div>
           )}
@@ -760,24 +740,39 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
   );
 }
 
-interface ScoreItemProps {
+function ScoreSelector({ icon: Icon, label, value, scale, onChange }: {
   icon: React.ElementType;
   label: string;
-  value: number;
-  description?: string;
-}
-
-function ScoreItem({ icon: Icon, label, value, description }: ScoreItemProps) {
+  value: number | null;
+  scale: Record<number, { label: string }>;
+  onChange: (value: number | null) => void;
+}) {
   return (
-    <div className="flex items-center gap-2 p-2 rounded-md bg-secondary/30 text-sm">
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      <div>
-        <div className="flex items-center gap-1">
-          <span className="font-medium">{label}:</span>
-          <span>{value}/5</span>
-        </div>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
       </div>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            onClick={() => onChange(value === n ? null : n)}
+            className={cn(
+              "h-7 w-7 rounded text-xs font-medium transition-colors",
+              value === n
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary/50 hover:bg-secondary text-muted-foreground"
+            )}
+            title={scale[n]?.label}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      {value && scale[value] && (
+        <p className="text-xs text-muted-foreground">{scale[value].label}</p>
+      )}
     </div>
   );
 }
