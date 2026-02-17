@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarIcon, Clock, Tag, AlertCircle } from 'lucide-react';
+import { CalendarIcon, Clock, Tag, AlertCircle, Plus, ChevronsUpDown, Check } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,16 @@ import {
 } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+  CommandEmpty,
+} from './ui/command';
 import { cn } from '@/lib/utils';
 import { parseTaskInput, type ParsedTask } from '@/lib/nlp-parser';
 import type { ListWithCount } from '@uptier/shared';
@@ -37,6 +47,9 @@ const PRIORITY_LABELS: Record<number, string> = {
 export function NewTaskDialog({ open, onOpenChange, defaultListId, onTaskCreated }: NewTaskDialogProps) {
   const [title, setTitle] = useState('');
   const [selectedListId, setSelectedListId] = useState('');
+  const [listPopoverOpen, setListPopoverOpen] = useState(false);
+  const [creatingList, setCreatingList] = useState(false);
+  const [newListName, setNewListName] = useState('');
   const queryClient = useQueryClient();
 
   const { data: lists = [] } = useQuery<ListWithCount[]>({
@@ -48,6 +61,8 @@ export function NewTaskDialog({ open, onOpenChange, defaultListId, onTaskCreated
   useEffect(() => {
     if (open) {
       setTitle('');
+      setCreatingList(false);
+      setNewListName('');
       if (defaultListId && !defaultListId.startsWith('smart:')) {
         setSelectedListId(defaultListId);
       } else if (lists.length > 0) {
@@ -62,6 +77,17 @@ export function NewTaskDialog({ open, onOpenChange, defaultListId, onTaskCreated
   }, [title]);
 
   const hasTokens = parsed && parsed.tokens.length > 0;
+
+  const createListMutation = useMutation({
+    mutationFn: (name: string) => window.electronAPI.lists.create({ name }),
+    onSuccess: (newList) => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      setSelectedListId(newList.id);
+      setNewListName('');
+      setCreatingList(false);
+      setListPopoverOpen(false);
+    },
+  });
 
   const createTaskMutation = useMutation({
     mutationFn: async (p: ParsedTask) => {
@@ -108,6 +134,8 @@ export function NewTaskDialog({ open, onOpenChange, defaultListId, onTaskCreated
     createTaskMutation.mutate(p);
   };
 
+  const selectedList = lists.find(l => l.id === selectedListId);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -122,15 +150,88 @@ export function NewTaskDialog({ open, onOpenChange, defaultListId, onTaskCreated
           {/* List selector */}
           <div>
             <label className="text-sm font-medium mb-1.5 block">List</label>
-            <select
-              value={selectedListId}
-              onChange={(e) => setSelectedListId(e.target.value)}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              {lists.map((list) => (
-                <option key={list.id} value={list.id}>{list.name}</option>
-              ))}
-            </select>
+            <Popover open={listPopoverOpen} onOpenChange={(popoverOpen) => {
+              setListPopoverOpen(popoverOpen);
+              if (!popoverOpen) { setCreatingList(false); setNewListName(''); }
+            }}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={listPopoverOpen}
+                  className="w-full justify-between h-9 text-sm font-normal"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    {selectedList && (
+                      <div
+                        className="h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: selectedList.color }}
+                      />
+                    )}
+                    {selectedList?.name || 'Select list...'}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" collisionPadding={8}>
+                {creatingList ? (
+                  <div className="p-2">
+                    <Input
+                      autoFocus
+                      placeholder="List name"
+                      value={newListName}
+                      onChange={(e) => setNewListName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newListName.trim()) {
+                          createListMutation.mutate(newListName.trim());
+                        }
+                        if (e.key === 'Escape') {
+                          setCreatingList(false);
+                          setNewListName('');
+                        }
+                      }}
+                      className="h-8 text-sm"
+                      disabled={createListMutation.isPending}
+                    />
+                  </div>
+                ) : (
+                  <Command>
+                    <CommandInput placeholder="Search lists..." />
+                    <CommandList className="max-h-[min(300px,var(--radix-popover-content-available-height,300px)-44px)]">
+                      <CommandEmpty>No lists found.</CommandEmpty>
+                      <CommandGroup>
+                        {lists.map((list) => (
+                          <CommandItem
+                            key={list.id}
+                            value={list.name}
+                            onSelect={() => {
+                              setSelectedListId(list.id);
+                              setListPopoverOpen(false);
+                            }}
+                          >
+                            <div
+                              className="h-2.5 w-2.5 rounded-full mr-2 shrink-0"
+                              style={{ backgroundColor: list.color }}
+                            />
+                            {list.name}
+                            {list.id === selectedListId && (
+                              <Check className="ml-auto h-4 w-4" />
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                      <CommandSeparator />
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setCreatingList(true)}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create new list...
+                        </CommandItem>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                )}
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Task input */}
