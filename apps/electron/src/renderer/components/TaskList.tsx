@@ -83,14 +83,16 @@ export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskL
     return map;
   }, [atRiskTasks]);
 
-  // Filter tasks by search query
+  // Filter tasks by search query (matches title, notes, tags, and goals)
   const filteredTasks = useMemo(() => {
     if (!searchQuery.trim()) return tasks;
     const query = searchQuery.toLowerCase();
     return tasks.filter(
       (task) =>
         task.title.toLowerCase().includes(query) ||
-        (task.notes && task.notes.toLowerCase().includes(query))
+        (task.notes && task.notes.toLowerCase().includes(query)) ||
+        task.tags?.some(tag => tag.name.toLowerCase().includes(query)) ||
+        task.goals?.some(goal => goal.goal_name.toLowerCase().includes(query))
     );
   }, [tasks, searchQuery]);
 

@@ -109,7 +109,7 @@ export function CommandPalette({
   // Search tasks (only when query >= 2 chars)
   const { data: searchResults = [] } = useQuery<TaskWithGoals[]>({
     queryKey: ['tasks', 'search', search],
-    queryFn: () => window.electronAPI.tasks.search(search, 15),
+    queryFn: () => window.electronAPI.tasks.search(search, 15, true),
     enabled: open && search.length >= 2,
   });
 
@@ -139,8 +139,11 @@ export function CommandPalette({
                   onSelect={() => handleSelect(() => onSelectTask(task))}
                 >
                   <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1 truncate">{task.title}</span>
-                  {task.due_date && (
+                  <span className={`flex-1 truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</span>
+                  {task.completed && (
+                    <span className="text-xs text-muted-foreground ml-2">(completed)</span>
+                  )}
+                  {!task.completed && task.due_date && (
                     <span className="text-xs text-muted-foreground ml-2">{task.due_date}</span>
                   )}
                 </CommandItem>

@@ -392,16 +392,30 @@ function getTasksByDateRange(startDate: string, endDate: string): TaskWithGoals[
   });
 }
 
-function searchTasks(query: string, limit: number = 20): TaskWithGoals[] {
+function searchTasks(query: string, limit: number = 20, includeCompleted: boolean = false): TaskWithGoals[] {
   const db = getDb();
-  ipcLog.debug('Searching tasks', { query, limit });
+  ipcLog.debug('Searching tasks', { query, limit, includeCompleted });
+
+  const likeParam = `%${query}%`;
+  const conditions: string[] = [
+    `(t.title LIKE ? OR EXISTS (
+      SELECT 1 FROM task_tags tt
+      JOIN tags tg ON tg.id = tt.tag_id
+      WHERE tt.task_id = t.id AND tg.name LIKE ?
+    ))`,
+  ];
+  const params: unknown[] = [likeParam, likeParam];
+
+  if (!includeCompleted) {
+    conditions.push('t.completed = 0');
+  }
 
   const tasks = db.prepare(`
-    SELECT * FROM tasks
-    WHERE completed = 0 AND title LIKE ?
-    ORDER BY updated_at DESC
+    SELECT t.* FROM tasks t
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY t.updated_at DESC
     LIMIT ?
-  `).all(`%${query}%`, limit) as Task[];
+  `).all(...params, limit) as Task[];
 
   const goalQuery = db.prepare(`
     SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
@@ -1248,7 +1262,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:uncomplete', withLogging('tasks:uncomplete', (_, id: string) => uncompleteTask(id)));
   ipcMain.handle('tasks:reorder', withLogging('tasks:reorder', (_, listId: string, taskIds: string[]) => reorderTasks(listId, taskIds)));
   ipcMain.handle('tasks:getByDateRange', withLogging('tasks:getByDateRange', (_, startDate: string, endDate: string) => getTasksByDateRange(startDate, endDate)));
-  ipcMain.handle('tasks:search', withLogging('tasks:search', (_, query: string, limit?: number) => searchTasks(query, limit)));
+  ipcMain.handle('tasks:search', withLogging('tasks:search', (_, query: string, limit?: number, includeCompleted?: boolean) => searchTasks(query, limit, includeCompleted)));
 
   // Goals
   ipcMain.handle('goals:getAll', withLogging('goals:getAll', () => getGoals()));
