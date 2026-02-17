@@ -576,6 +576,13 @@ function updateTask(id: string, input: UpdateTaskInput): Task | null {
     values.push(input.context_tags ? JSON.stringify(input.context_tags) : null);
   }
 
+  if (input.list_id !== undefined) {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM tasks WHERE list_id = ?').get(input.list_id) as { max: number | null };
+    const newPosition = (maxPos.max ?? -1) + 1;
+    updates.push('list_id = ?', 'position = ?');
+    values.push(input.list_id, newPosition);
+  }
+
   if (updates.length === 0) return db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as Task;
 
   ipcLog.debug('Updating task', { id, fields: updates.length });

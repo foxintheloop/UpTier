@@ -197,6 +197,7 @@ export interface UpdateTaskInput {
   recurrence_rule?: string | null;
   recurrence_end_date?: string | null;
   position?: number;
+  list_id?: string;
 }
 
 export interface BulkPriorityUpdate {

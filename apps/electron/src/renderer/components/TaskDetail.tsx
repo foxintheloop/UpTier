@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, LayoutList, Loader2, Check, Trash2, Play, ChevronDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
+import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, LayoutList, Loader2, Check, Trash2, Play, ChevronDown, ChevronsUpDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -12,6 +12,14 @@ import { TagBadge } from './TagBadge';
 import { GoalPicker } from './GoalPicker';
 import { SubtaskList } from './SubtaskList';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandGroup,
+  CommandItem,
+  CommandEmpty,
+} from './ui/command';
 import { cn } from '@/lib/utils';
 import { useFeatures } from '../hooks/useFeatures';
 import type { TaskWithGoals, UpdateTaskInput, ListWithCount } from '@uptier/shared';
@@ -73,6 +81,7 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
   const [breakdownSuggestion, setBreakdownSuggestion] = useState<BreakdownSuggestion | null>(null);
   const [loadingDueDate, setLoadingDueDate] = useState(false);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
+  const [listPopoverOpen, setListPopoverOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: lists = [] } = useQuery<ListWithCount[]>({
@@ -124,6 +133,7 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
     onSuccess: (updated) => {
       if (updated) {
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
         onUpdate({ ...task, ...updated });
       }
     },
@@ -329,17 +339,59 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
 
           <div className={cn("space-y-6", task.completed && "opacity-60")}>
           {/* List */}
-          {taskList && (
-            <div className="flex items-center gap-2 text-sm">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
               <LayoutList className="h-4 w-4" />
-              <span className="font-medium">List</span>
-              <div
-                className="h-2.5 w-2.5 rounded-full flex-shrink-0 ml-1"
-                style={{ backgroundColor: taskList.color }}
-              />
-              <span className="text-muted-foreground">{taskList.name}</span>
+              List
             </div>
-          )}
+            <Popover open={listPopoverOpen} onOpenChange={setListPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between h-9 text-sm font-normal"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    {taskList && (
+                      <div className="h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: taskList.color }} />
+                    )}
+                    {taskList?.name || 'Select list...'}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" collisionPadding={8}>
+                <Command>
+                  <CommandInput placeholder="Search lists..." />
+                  <CommandList className="max-h-[min(300px,var(--radix-popover-content-available-height,300px)-44px)]">
+                    <CommandEmpty>No lists found.</CommandEmpty>
+                    <CommandGroup>
+                      {lists.map((list) => (
+                        <CommandItem
+                          key={list.id}
+                          value={list.name}
+                          onSelect={() => {
+                            if (list.id !== task.list_id) {
+                              updateMutation.mutate({ list_id: list.id });
+                            }
+                            setListPopoverOpen(false);
+                          }}
+                        >
+                          <div className="h-2.5 w-2.5 rounded-full mr-2 shrink-0"
+                            style={{ backgroundColor: list.color }} />
+                          {list.name}
+                          {list.id === task.list_id && (
+                            <Check className="ml-auto h-4 w-4" />
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
 
           {/* Priority Section */}
           {features.priorityTiers && task.priority_tier && (
