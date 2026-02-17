@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { undoableDelete } from '@/lib/undo-delete';
 import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, LayoutList, Loader2, Check, Trash2, Play, ChevronDown, ChevronsUpDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -150,9 +150,21 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
   });
 
   const handleDelete = () => {
-    if (window.confirm(`Delete "${task.title}"? This action cannot be undone.`)) {
-      deleteMutation.mutate();
-    }
+    onClose();
+    undoableDelete({
+      label: task.title,
+      onDelete: () => {
+        window.electronAPI.tasks.delete(task.id);
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['goals'] });
+      },
+      onUndo: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['goals'] });
+      },
+    });
   };
 
   const handleTitleBlur = () => {

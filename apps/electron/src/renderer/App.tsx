@@ -17,6 +17,7 @@ import { NewTaskDialog } from './components/NewTaskDialog';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { Toaster } from './components/ui/toaster';
 import { useFeatures, useOnboarding } from './hooks/useFeatures';
+import { undoableDelete } from './lib/undo-delete';
 import type { TaskWithGoals, GoalWithProgress, Task, List } from '@uptier/shared';
 
 // Default focus duration in minutes
@@ -248,15 +249,23 @@ export default function App() {
   }, [selectedTask, queryClient]);
 
   // Handle task deletion
-  const handleDeleteTask = useCallback(async () => {
+  const handleDeleteTask = useCallback(() => {
     if (!selectedTask) return;
-    const confirmed = window.confirm(`Delete "${selectedTask.title}"?`);
-    if (confirmed) {
-      await window.electronAPI.tasks.delete(selectedTask.id);
-      setSelectedTask(null);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['lists'] });
-    }
+    const taskToDelete = selectedTask;
+    setSelectedTask(null);
+    queryClient.invalidateQueries({ queryKey: ['lists'] });
+
+    undoableDelete({
+      label: taskToDelete.title,
+      onDelete: () => {
+        window.electronAPI.tasks.delete(taskToDelete.id);
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      },
+      onUndo: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+      },
+    });
   }, [selectedTask, queryClient]);
 
   // Handle starting a focus session

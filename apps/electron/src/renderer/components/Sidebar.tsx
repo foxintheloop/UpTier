@@ -39,6 +39,7 @@ import { Input } from './ui/input';
 import { cn } from '@/lib/utils';
 import { SmartListEditor } from './SmartListEditor';
 import { useFeatures } from '../hooks/useFeatures';
+import { undoableDelete } from '@/lib/undo-delete';
 import type { ListWithCount, GoalWithProgress, Timeframe, List as ListType } from '@uptier/shared';
 
 interface DatabaseProfile {
@@ -253,9 +254,19 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
   const handleDeleteSmartList = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     setFilterMenuOpen(null);
-    if (window.confirm('Delete this filter?')) {
-      deleteSmartListMutation.mutate(id);
+    const filterName = smartLists.find(l => l.id === id)?.name || 'filter';
+    if (selectedListId === id) {
+      onSelectList('smart:my_day');
     }
+    undoableDelete({
+      label: filterName,
+      onDelete: () => {
+        deleteSmartListMutation.mutate(id);
+      },
+      onUndo: () => {
+        queryClient.invalidateQueries({ queryKey: ['smartLists'] });
+      },
+    });
   };
 
   const handleEditSmartList = (list: ListType) => {
@@ -318,9 +329,25 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
   const handleDeleteList = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     setListMenuOpen(null);
-    if (window.confirm('Delete this list? Tasks in this list will be moved to the default list.')) {
-      deleteListMutation.mutate(id);
+    const listName = lists.find(l => l.id === id)?.name || 'list';
+    if (selectedListId === id) {
+      const remainingLists = lists.filter((l) => l.id !== id);
+      if (remainingLists.length > 0) {
+        onSelectList(remainingLists[0].id);
+      } else {
+        onSelectList('smart:my_day');
+      }
     }
+    undoableDelete({
+      label: `${listName} and all its tasks`,
+      onDelete: () => {
+        deleteListMutation.mutate(id);
+      },
+      onUndo: () => {
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      },
+    });
   };
 
   // Close dropdown when clicking outside
