@@ -405,38 +405,42 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
             </Popover>
           </div>
 
-          {/* Priority Section */}
-          {features.priorityTiers && task.priority_tier && (
+          {/* Priority Tier */}
+          {features.priorityTiers && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <AlertCircle className="h-4 w-4" />
                 Priority
               </div>
-              <div
-                className={cn(
-                  'p-3 rounded-md border',
-                  task.priority_tier === 1 && 'border-red-500/30 bg-red-500/5',
-                  task.priority_tier === 2 && 'border-amber-500/30 bg-amber-500/5',
-                  task.priority_tier === 3 && 'border-gray-500/30 bg-gray-500/5'
-                )}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge
-                    variant={
-                      task.priority_tier === 1
-                        ? 'tier1'
-                        : task.priority_tier === 2
-                          ? 'tier2'
-                          : 'tier3'
-                    }
-                  >
-                    Tier {task.priority_tier} — {tierInfo?.label}
-                  </Badge>
-                </div>
-                {task.priority_reasoning && (
-                  <p className="text-sm text-muted-foreground">{task.priority_reasoning}</p>
-                )}
+              <div className="flex gap-2">
+                {([1, 2, 3] as const).map((tier) => {
+                  const info = PRIORITY_TIERS[tier];
+                  return (
+                    <button
+                      key={tier}
+                      onClick={() => updateMutation.mutate({
+                        priority_tier: task.priority_tier === tier ? null : tier,
+                      })}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors',
+                        task.priority_tier === tier
+                          ? tier === 1
+                            ? 'bg-red-500/20 border-red-500 text-red-400'
+                            : tier === 2
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                              : 'bg-gray-500/20 border-gray-500 text-gray-400'
+                          : 'border-input hover:bg-accent'
+                      )}
+                      title={info.label}
+                    >
+                      Tier {tier}
+                    </button>
+                  );
+                })}
               </div>
+              {task.priority_reasoning && (
+                <p className="text-sm text-muted-foreground">{task.priority_reasoning}</p>
+              )}
             </div>
           )}
 
