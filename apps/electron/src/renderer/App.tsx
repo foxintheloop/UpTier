@@ -202,6 +202,7 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['subtasks'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['smartLists'] });
+      queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       queryClient.invalidateQueries({ queryKey: ['database-profiles'] });
       queryClient.invalidateQueries({ queryKey: ['database-active'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
@@ -239,6 +240,7 @@ export default function App() {
     }
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     queryClient.invalidateQueries({ queryKey: ['lists'] });
+    queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
     queryClient.invalidateQueries({ queryKey: ['analytics'] });
     // Optimistically update selectedTask so detail panel reflects change immediately
     setSelectedTask(prev => prev ? {
@@ -260,10 +262,12 @@ export default function App() {
       onDelete: () => {
         window.electronAPI.tasks.delete(taskToDelete.id);
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       },
       onUndo: () => {
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
         queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       },
     });
   }, [selectedTask, queryClient]);

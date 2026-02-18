@@ -32,6 +32,7 @@ import {
   Eye,
   Sunrise,
   BarChart3,
+  AlertTriangle,
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -160,6 +161,11 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
   });
   const atRiskCount = atRiskTasks.length;
 
+  const { data: smartListCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ['smartListCounts'],
+    queryFn: () => window.electronAPI.tasks.getSmartListCounts(),
+  });
+
   const { data: focusGoalData } = useQuery<{ todayMinutes: number; dailyGoalMinutes: number; progressPercent: number }>({
     queryKey: ['analytics', 'focusGoal'],
     queryFn: async () => {
@@ -229,6 +235,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
     mutationFn: (id: string) => window.electronAPI.lists.delete(id),
     onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
+      queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       // If deleted list was selected, select first available list or smart list
       if (selectedListId === deletedId) {
         const remainingLists = lists.filter((l) => l.id !== deletedId);
@@ -346,6 +353,7 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
       onUndo: () => {
         queryClient.invalidateQueries({ queryKey: ['lists'] });
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       },
     });
   };
@@ -605,7 +613,8 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
               if (sl.id === 'smart:dashboard') return features.dashboard;
               return true;
             }).map((smartList) => {
-              const showBadge = !collapsed && features.deadlineAlerts && atRiskCount > 0 &&
+              const count = smartListCounts[smartList.id];
+              const showAtRisk = !collapsed && features.deadlineAlerts && atRiskCount > 0 &&
                 (smartList.id === 'smart:my_day' || smartList.id === 'smart:planned');
               return (
                 <button
@@ -624,11 +633,18 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
                     className="h-4 w-4 flex-shrink-0"
                     style={{ color: smartList.color }}
                   />
-                  {!collapsed && <span className="flex-1 text-left">{smartList.name}</span>}
-                  {showBadge && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-amber-500/20 text-amber-400">
-                      {atRiskCount}
-                    </span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 text-left">{smartList.name}</span>
+                      {count > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {count}
+                        </span>
+                      )}
+                      {showAtRisk && (
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
+                      )}
+                    </>
                   )}
                 </button>
               );

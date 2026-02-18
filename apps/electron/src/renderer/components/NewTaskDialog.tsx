@@ -123,6 +123,7 @@ export function NewTaskDialog({ open, onOpenChange, defaultListId, onTaskCreated
       setTitle('');
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['lists'] });
+      queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       onOpenChange(false);
       onTaskCreated?.(selectedListId);
     },

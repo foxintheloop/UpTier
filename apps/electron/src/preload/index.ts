@@ -210,6 +210,8 @@ const electronAPI = {
       ipcRenderer.invoke('tasks:getByDateRange', startDate, endDate),
     search: (query: string, limit?: number, includeCompleted?: boolean): Promise<TaskWithGoals[]> =>
       ipcRenderer.invoke('tasks:search', query, limit, includeCompleted),
+    getSmartListCounts: (): Promise<Record<string, number>> =>
+      ipcRenderer.invoke('tasks:getSmartListCounts'),
   },
 
   // Goals

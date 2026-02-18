@@ -270,6 +270,21 @@ function getSmartListTasks(smartListId: string): TaskWithGoals[] {
   });
 }
 
+function getSmartListCounts(): Record<string, number> {
+  const db = getDb();
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  const myDay = (db.prepare('SELECT COUNT(*) as count FROM tasks WHERE due_date = ? AND completed = 0').get(today) as { count: number }).count;
+  const important = (db.prepare('SELECT COUNT(*) as count FROM tasks WHERE priority_tier = 1 AND completed = 0').get() as { count: number }).count;
+  const planned = (db.prepare('SELECT COUNT(*) as count FROM tasks WHERE due_date IS NOT NULL AND completed = 0').get() as { count: number }).count;
+
+  return {
+    'smart:my_day': myDay,
+    'smart:important': important,
+    'smart:planned': planned,
+  };
+}
+
 function expandRecurringTask(task: Task, rangeStart: string, rangeEnd: string): Task[] {
   if (!task.recurrence_rule || !task.due_date) return [task];
 
@@ -1263,6 +1278,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:reorder', withLogging('tasks:reorder', (_, listId: string, taskIds: string[]) => reorderTasks(listId, taskIds)));
   ipcMain.handle('tasks:getByDateRange', withLogging('tasks:getByDateRange', (_, startDate: string, endDate: string) => getTasksByDateRange(startDate, endDate)));
   ipcMain.handle('tasks:search', withLogging('tasks:search', (_, query: string, limit?: number, includeCompleted?: boolean) => searchTasks(query, limit, includeCompleted)));
+  ipcMain.handle('tasks:getSmartListCounts', withLogging('tasks:getSmartListCounts', () => getSmartListCounts()));
 
   // Goals
   ipcMain.handle('goals:getAll', withLogging('goals:getAll', () => getGoals()));

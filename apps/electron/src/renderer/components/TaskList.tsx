@@ -185,11 +185,13 @@ export const TaskList = forwardRef<TaskListHandle, TaskListProps>(function TaskL
     }
     queryClient.invalidateQueries({ queryKey: ['tasks', listId] });
     queryClient.invalidateQueries({ queryKey: ['lists'] });
+    queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
   };
 
   const handleTaskCreated = () => {
     queryClient.invalidateQueries({ queryKey: ['tasks', listId] });
     queryClient.invalidateQueries({ queryKey: ['lists'] });
+    queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
   };
 
   if (isLoading) {

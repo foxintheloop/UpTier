@@ -142,6 +142,7 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
       if (updated) {
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
         queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
         onUpdate({ ...task, ...updated });
       }
     },
@@ -166,11 +167,13 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
         queryClient.invalidateQueries({ queryKey: ['lists'] });
         queryClient.invalidateQueries({ queryKey: ['goals'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       },
       onUndo: () => {
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
         queryClient.invalidateQueries({ queryKey: ['lists'] });
         queryClient.invalidateQueries({ queryKey: ['goals'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       },
     });
   };
