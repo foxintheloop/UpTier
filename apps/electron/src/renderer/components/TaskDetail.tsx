@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { undoableDelete } from '@/lib/undo-delete';
 import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, LayoutList, Loader2, Check, Trash2, Play, ChevronDown, ChevronsUpDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
@@ -71,6 +71,7 @@ interface BreakdownSuggestion {
 export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, width, onWidthChange }: TaskDetailProps) {
   const features = useFeatures();
   const [title, setTitle] = useState(task.title);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
   const [notes, setNotes] = useState(task.notes || '');
   const [showDueDateSuggestion, setShowDueDateSuggestion] = useState(false);
   const [customDuration, setCustomDuration] = useState('');
@@ -98,6 +99,13 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
     setShowBreakdownSuggestion(false);
     setDueDateSuggestion(null);
     setBreakdownSuggestion(null);
+    // Auto-resize title textarea
+    requestAnimationFrame(() => {
+      if (titleRef.current) {
+        titleRef.current.style.height = 'auto';
+        titleRef.current.style.height = titleRef.current.scrollHeight + 'px';
+      }
+    });
   }, [task.id, task.title, task.notes]);
 
   // Handle resize drag
@@ -335,16 +343,28 @@ export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, 
               onCheckedChange={() => onComplete?.()}
               className="mt-2 h-5 w-5 rounded-full"
             />
-            <div className="flex-1">
-              <Input
+            <div className="flex-1 min-w-0">
+              <textarea
+                ref={titleRef}
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
                 onBlur={handleTitleBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
                 className={cn(
-                  "text-lg font-medium border-0 px-0 focus-visible:ring-0",
+                  "w-full text-lg font-medium border-0 px-0 bg-transparent resize-none overflow-hidden focus:outline-none focus:ring-0",
                   task.completed && "line-through text-muted-foreground"
                 )}
                 placeholder="Task title"
+                rows={1}
               />
             </div>
           </div>
