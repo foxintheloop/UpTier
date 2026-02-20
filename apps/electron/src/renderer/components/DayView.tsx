@@ -20,6 +20,11 @@ const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT_PX;
 const DEFAULT_DURATION = 30;
 const BLOCK_GAP_PX = 2;
 
+// Panel resize constants
+const MIN_PANEL_WIDTH = 150;
+const MAX_PANEL_WIDTH = 500;
+const DEFAULT_PANEL_WIDTH = 224; // matches w-56
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -234,18 +239,20 @@ interface UnscheduledSidebarProps {
   tasks: TaskWithGoals[];
   selectedTaskId?: string;
   onSelectTask: (task: TaskWithGoals) => void;
+  width: number;
 }
 
-function UnscheduledSidebar({ tasks, selectedTaskId, onSelectTask }: UnscheduledSidebarProps) {
+function UnscheduledSidebar({ tasks, selectedTaskId, onSelectTask, width }: UnscheduledSidebarProps) {
   const { setNodeRef, isOver } = useDroppable({ id: 'unscheduled' });
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'w-56 shrink-0 border-r border-border flex flex-col',
+        'shrink-0 border-r border-border flex flex-col',
         isOver && 'bg-primary/5',
       )}
+      style={{ width: `${width}px` }}
     >
       <div className="px-3 py-2 border-b border-border flex-shrink-0">
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -347,6 +354,21 @@ export function DayView({ date, tasks, onSelectTask, selectedTaskId }: DayViewPr
   const [resizingTaskId, setResizingTaskId] = useState<string | null>(null);
   const resizeStartY = useRef(0);
   const resizeStartMinutes = useRef(0);
+
+  // Panel resize state
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('dayView:unscheduledWidth');
+      if (stored) {
+        const w = parseInt(stored, 10);
+        if (w >= MIN_PANEL_WIDTH && w <= MAX_PANEL_WIDTH) return w;
+      }
+    } catch { /* ignore */ }
+    return DEFAULT_PANEL_WIDTH;
+  });
+  const [isResizingPanel, setIsResizingPanel] = useState(false);
+  const panelResizeStartX = useRef(0);
+  const panelResizeStartWidth = useRef(0);
 
   const dateKey = format(date, 'yyyy-MM-dd');
 
@@ -450,13 +472,56 @@ export function DayView({ date, tasks, onSelectTask, selectedTaskId }: DayViewPr
     };
   }, [resizingTaskId, scheduled, queryClient]);
 
+  // Panel resize handling
+  const handlePanelResizeStart = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    panelResizeStartX.current = e.clientX;
+    panelResizeStartWidth.current = panelWidth;
+    setIsResizingPanel(true);
+  }, [panelWidth]);
+
+  useEffect(() => {
+    if (!isResizingPanel) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const delta = e.clientX - panelResizeStartX.current;
+      const newWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, panelResizeStartWidth.current + delta));
+      setPanelWidth(newWidth);
+    };
+
+    const handlePointerUp = () => {
+      setIsResizingPanel(false);
+      localStorage.setItem('dayView:unscheduledWidth', String(panelWidth));
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+    };
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [isResizingPanel, panelWidth]);
+
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className={cn('flex h-full overflow-hidden', isResizingPanel && 'select-none cursor-col-resize')}>
       {/* Unscheduled sidebar */}
       <UnscheduledSidebar
         tasks={unscheduled}
         selectedTaskId={selectedTaskId}
         onSelectTask={onSelectTask}
+        width={panelWidth}
+      />
+
+      {/* Resize handle */}
+      <div
+        className={cn(
+          'w-1 shrink-0 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors',
+          isResizingPanel && 'bg-primary/50',
+        )}
+        onPointerDown={handlePanelResizeStart}
       />
 
       {/* Time grid */}

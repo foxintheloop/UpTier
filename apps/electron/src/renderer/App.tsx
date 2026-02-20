@@ -556,9 +556,15 @@ export default function App() {
       {/* Daily Planning Overlay */}
       {dailyPlanningOpen && features.dailyPlanning && (
         <DailyPlanning
-          onClose={() => setDailyPlanningOpen(false)}
+          onClose={() => {
+            setDailyPlanningOpen(false);
+            const today = new Date().toISOString().split('T')[0];
+            window.electronAPI.planning.setLastPlanningDate(today);
+          }}
           onComplete={() => {
             setDailyPlanningOpen(false);
+            const today = new Date().toISOString().split('T')[0];
+            window.electronAPI.planning.setLastPlanningDate(today);
             setSelectedListId('smart:my_day');
             setSelectedTask(null);
             setSelectedGoal(null);

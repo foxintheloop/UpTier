@@ -243,11 +243,6 @@ export function DailyPlanning({ onClose, onComplete, initialDate, initialMode }:
     // Record this date as planned
     await window.electronAPI.planning.addPlannedDate(targetDate);
 
-    // If planning today, also set lastPlanningDate for auto-launch suppression
-    if (isTargetToday) {
-      await window.electronAPI.planning.setLastPlanningDate(targetDate);
-    }
-
     // In week mode, advance to next day
     if (planningMode === 'week' && weekDayIndex < weekDays.length - 1) {
       setCompletedWeekDays((prev) => new Set(prev).add(targetDate));
