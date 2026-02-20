@@ -1,5 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   Sun,
   Star,
@@ -33,6 +37,7 @@ import {
   Sunrise,
   BarChart3,
   AlertTriangle,
+  GripVertical,
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -106,6 +111,20 @@ const TIMEFRAME_COLORS: Record<Timeframe, string> = {
   yearly: 'text-red-400',
 };
 
+function SortableSidebarItem({ id, disabled, children }: {
+  id: string;
+  disabled?: boolean;
+  children: (props: { dragHandleProps: Record<string, unknown>; isDragging: boolean }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      {children({ dragHandleProps: listeners ?? {}, isDragging })}
+    </div>
+  );
+}
+
 export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelectGoal, onSettingsClick, onSearchClick, onDatabaseSwitch, onPlanDay, onNewTask, collapsed = false, onToggleCollapse, width = DEFAULT_SIDEBAR_WIDTH, onWidthChange }: SidebarProps) {
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -125,9 +144,20 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
   const [filterEditorOpen, setFilterEditorOpen] = useState(false);
   const [editingFilter, setEditingFilter] = useState<ListType | null>(null);
   const [filterMenuOpen, setFilterMenuOpen] = useState<string | null>(null);
+  const [smartListOrder, setSmartListOrder] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('smartListOrder');
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
 
   const queryClient = useQueryClient();
   const features = useFeatures();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const { data: lists = [] } = useQuery<ListWithCount[]>({
     queryKey: ['lists'],
@@ -174,6 +204,78 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
     },
     staleTime: 30_000,
   });
+
+  // Compute ordered smart lists from localStorage order
+  const filteredSmartLists = useMemo(() =>
+    SMART_LISTS.filter((sl) => {
+      if (sl.id === 'smart:calendar') return features.calendarView;
+      if (sl.id === 'smart:dashboard') return features.dashboard;
+      return true;
+    }),
+    [features.calendarView, features.dashboard]
+  );
+
+  const orderedSmartLists = useMemo(() => {
+    if (smartListOrder.length === 0) return filteredSmartLists;
+    const ordered = [...filteredSmartLists].sort((a, b) => {
+      const ai = smartListOrder.indexOf(a.id);
+      const bi = smartListOrder.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    return ordered;
+  }, [filteredSmartLists, smartListOrder]);
+
+  // Drag-end handlers
+  const handleSmartListDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = orderedSmartLists.findIndex(s => s.id === active.id);
+    const newIndex = orderedSmartLists.findIndex(s => s.id === (over.id as string));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const newOrder = arrayMove(orderedSmartLists, oldIndex, newIndex);
+    const newIds = newOrder.map(s => s.id);
+    setSmartListOrder(newIds);
+    localStorage.setItem('smartListOrder', JSON.stringify(newIds));
+  }, [orderedSmartLists]);
+
+  const handleListDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = lists.findIndex(l => l.id === active.id);
+    const newIndex = lists.findIndex(l => l.id === (over.id as string));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const newOrder = arrayMove(lists, oldIndex, newIndex);
+    queryClient.setQueryData(['lists'], newOrder);
+    await window.electronAPI.lists.reorder(newOrder.map(l => l.id));
+    queryClient.invalidateQueries({ queryKey: ['lists'] });
+  }, [lists, queryClient]);
+
+  const handleFilterDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = customSmartLists.findIndex(l => l.id === active.id);
+    const newIndex = customSmartLists.findIndex(l => l.id === (over.id as string));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const newOrder = arrayMove(customSmartLists, oldIndex, newIndex);
+    queryClient.setQueryData(['smartLists'], newOrder);
+    await window.electronAPI.smartLists.reorder(newOrder.map(l => l.id));
+    queryClient.invalidateQueries({ queryKey: ['smartLists'] });
+  }, [customSmartLists, queryClient]);
+
+  const handleGoalDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = goals.findIndex(g => g.id === active.id);
+    const newIndex = goals.findIndex(g => g.id === (over.id as string));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const newOrder = arrayMove(goals, oldIndex, newIndex);
+    queryClient.setQueryData(['goals'], newOrder);
+    await window.electronAPI.goals.reorder(newOrder.map(g => g.id));
+    queryClient.invalidateQueries({ queryKey: ['goals'] });
+  }, [goals, queryClient]);
 
   const createListMutation = useMutation({
     mutationFn: (name: string) => window.electronAPI.lists.create({ name }),
@@ -608,47 +710,60 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
 
           {/* Smart Lists */}
           <div className="mb-4">
-            {SMART_LISTS.filter((sl) => {
-              if (sl.id === 'smart:calendar') return features.calendarView;
-              if (sl.id === 'smart:dashboard') return features.dashboard;
-              return true;
-            }).map((smartList) => {
-              const count = smartListCounts[smartList.id];
-              const showAtRisk = !collapsed && features.deadlineAlerts && atRiskCount > 0 &&
-                (smartList.id === 'smart:my_day' || smartList.id === 'smart:planned');
-              return (
-                <button
-                  key={smartList.id}
-                  onClick={() => onSelectList(smartList.id)}
-                  className={cn(
-                    'w-full flex items-center rounded-md text-sm transition-colors',
-                    collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-                    selectedListId === smartList.id
-                      ? 'bg-accent text-accent-foreground'
-                      : 'hover:bg-accent/50 text-muted-foreground'
-                  )}
-                  title={collapsed ? smartList.name : undefined}
-                >
-                  <smartList.icon
-                    className="h-4 w-4 flex-shrink-0"
-                    style={{ color: smartList.color }}
-                  />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 text-left">{smartList.name}</span>
-                      {count > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          {count}
-                        </span>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSmartListDragEnd}>
+              <SortableContext items={orderedSmartLists.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                {orderedSmartLists.map((smartList) => {
+                  const count = smartListCounts[smartList.id];
+                  const showAtRisk = !collapsed && features.deadlineAlerts && atRiskCount > 0 &&
+                    (smartList.id === 'smart:my_day' || smartList.id === 'smart:planned');
+                  return (
+                    <SortableSidebarItem key={smartList.id} id={smartList.id}>
+                      {({ dragHandleProps, isDragging }) => (
+                        <div
+                          className={cn(
+                            'group flex items-center rounded-md text-sm transition-colors cursor-pointer',
+                            collapsed ? 'justify-center p-2' : 'gap-1 px-1 py-2',
+                            selectedListId === smartList.id
+                              ? 'bg-accent text-accent-foreground'
+                              : 'hover:bg-accent/50 text-muted-foreground',
+                            isDragging && 'opacity-50 bg-accent shadow-lg'
+                          )}
+                          onClick={() => onSelectList(smartList.id)}
+                          title={collapsed ? smartList.name : undefined}
+                        >
+                          {!collapsed && (
+                            <div
+                              {...dragHandleProps}
+                              className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity px-0.5"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <smartList.icon
+                            className="h-4 w-4 flex-shrink-0 ml-1"
+                            style={{ color: smartList.color }}
+                          />
+                          {!collapsed && (
+                            <>
+                              <span className="flex-1 text-left ml-2">{smartList.name}</span>
+                              {count > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  {count}
+                                </span>
+                              )}
+                              {showAtRisk && (
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
+                              )}
+                            </>
+                          )}
+                        </div>
                       )}
-                      {showAtRisk && (
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
-                      )}
-                    </>
-                  )}
-                </button>
-              );
-            })}
+                    </SortableSidebarItem>
+                  );
+                })}
+              </SortableContext>
+            </DndContext>
           </div>
 
           {/* Custom Smart Lists (Filters) */}
@@ -676,63 +791,80 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
 
                 {(collapsed || filtersExpanded) && (
                   <div className={cn(!collapsed && "ml-2")}>
-                    {customSmartLists.map((smartList) => {
-                      const IconComp = getFilterIcon(smartList.icon);
-                      return (
-                        <div key={smartList.id} className="group relative filter-menu">
-                          <div
-                            onClick={() => onSelectList(smartList.id)}
-                            className={cn(
-                              'w-full flex items-center rounded-md text-sm transition-colors cursor-pointer',
-                              collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-                              selectedListId === smartList.id
-                                ? 'bg-accent text-accent-foreground'
-                                : 'hover:bg-accent/50 text-muted-foreground'
-                            )}
-                            title={collapsed ? smartList.name : undefined}
-                          >
-                            <IconComp
-                              className="h-4 w-4 flex-shrink-0"
-                              style={{ color: smartList.color }}
-                            />
-                            {!collapsed && (
-                              <>
-                                <span className="flex-1 text-left truncate">{smartList.name}</span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setFilterMenuOpen(filterMenuOpen === smartList.id ? null : smartList.id);
-                                  }}
-                                  className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
-                                >
-                                  <MoreVertical className="h-3.5 w-3.5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFilterDragEnd}>
+                      <SortableContext items={customSmartLists.map(l => l.id)} strategy={verticalListSortingStrategy}>
+                        {customSmartLists.map((smartList) => {
+                          const IconComp = getFilterIcon(smartList.icon);
+                          return (
+                            <SortableSidebarItem key={smartList.id} id={smartList.id}>
+                              {({ dragHandleProps, isDragging }) => (
+                                <div className={cn("group relative filter-menu", isDragging && "opacity-50 bg-accent shadow-lg rounded-md")}>
+                                  <div
+                                    onClick={() => onSelectList(smartList.id)}
+                                    className={cn(
+                                      'w-full flex items-center rounded-md text-sm transition-colors cursor-pointer',
+                                      collapsed ? 'justify-center p-2' : 'gap-1 px-1 py-2',
+                                      selectedListId === smartList.id
+                                        ? 'bg-accent text-accent-foreground'
+                                        : 'hover:bg-accent/50 text-muted-foreground'
+                                    )}
+                                    title={collapsed ? smartList.name : undefined}
+                                  >
+                                    {!collapsed && (
+                                      <div
+                                        {...dragHandleProps}
+                                        className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity px-0.5"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                                      </div>
+                                    )}
+                                    <IconComp
+                                      className="h-4 w-4 flex-shrink-0 ml-1"
+                                      style={{ color: smartList.color }}
+                                    />
+                                    {!collapsed && (
+                                      <>
+                                        <span className="flex-1 text-left truncate ml-2">{smartList.name}</span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setFilterMenuOpen(filterMenuOpen === smartList.id ? null : smartList.id);
+                                          }}
+                                          className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+                                        >
+                                          <MoreVertical className="h-3.5 w-3.5" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
 
-                          {/* Filter context menu */}
-                          {filterMenuOpen === smartList.id && (
-                            <div className="absolute right-2 top-full mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden min-w-[120px]">
-                              <button
-                                onClick={() => handleEditSmartList(smartList)}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent transition-colors"
-                              >
-                                <Pencil className="h-3 w-3" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={(e) => handleDeleteSmartList(e, smartList.id)}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent text-destructive transition-colors"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                                  {/* Filter context menu */}
+                                  {filterMenuOpen === smartList.id && (
+                                    <div className="absolute right-2 top-full mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden min-w-[120px]">
+                                      <button
+                                        onClick={() => handleEditSmartList(smartList)}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent transition-colors"
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={(e) => handleDeleteSmartList(e, smartList.id)}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent text-destructive transition-colors"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                        Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </SortableSidebarItem>
+                          );
+                        })}
+                      </SortableContext>
+                    </DndContext>
 
                     {/* New Filter button */}
                     {!collapsed && (
@@ -784,84 +916,101 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
 
             {(collapsed || listsExpanded) && (
               <div className={cn(!collapsed && "ml-2")}>
-                {lists.map((list) => (
-                  <div key={list.id} className="group relative list-menu">
-                    {editingListId === list.id && !collapsed ? (
-                      <div className="px-3 py-2">
-                        <Input
-                          autoFocus
-                          value={editingListName}
-                          onChange={(e) => setEditingListName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleRenameList(list.id);
-                            if (e.key === 'Escape') {
-                              setEditingListId(null);
-                              setEditingListName('');
-                            }
-                          }}
-                          onBlur={() => handleRenameList(list.id)}
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        onClick={() => onSelectList(list.id)}
-                        className={cn(
-                          'w-full flex items-center rounded-md text-sm transition-colors cursor-pointer',
-                          collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-                          selectedListId === list.id
-                            ? 'bg-accent text-accent-foreground'
-                            : 'hover:bg-accent/50 text-muted-foreground'
-                        )}
-                        title={collapsed ? list.name : undefined}
-                      >
-                        <div
-                          className={cn("rounded-sm flex-shrink-0", collapsed ? "h-4 w-4" : "h-3 w-3")}
-                          style={{ backgroundColor: list.color }}
-                        />
-                        {!collapsed && (
-                          <>
-                            <span className="flex-1 text-left truncate">{list.name}</span>
-                            {list.incomplete_count > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                {list.incomplete_count}
-                              </span>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleListDragEnd}>
+                  <SortableContext items={lists.map(l => l.id)} strategy={verticalListSortingStrategy}>
+                    {lists.map((list) => (
+                      <SortableSidebarItem key={list.id} id={list.id} disabled={editingListId === list.id}>
+                        {({ dragHandleProps, isDragging }) => (
+                          <div className={cn("group relative list-menu", isDragging && "opacity-50 bg-accent shadow-lg rounded-md")}>
+                            {editingListId === list.id && !collapsed ? (
+                              <div className="px-3 py-2">
+                                <Input
+                                  autoFocus
+                                  value={editingListName}
+                                  onChange={(e) => setEditingListName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleRenameList(list.id);
+                                    if (e.key === 'Escape') {
+                                      setEditingListId(null);
+                                      setEditingListName('');
+                                    }
+                                  }}
+                                  onBlur={() => handleRenameList(list.id)}
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                onClick={() => onSelectList(list.id)}
+                                className={cn(
+                                  'w-full flex items-center rounded-md text-sm transition-colors cursor-pointer',
+                                  collapsed ? 'justify-center p-2' : 'gap-1 px-1 py-2',
+                                  selectedListId === list.id
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'hover:bg-accent/50 text-muted-foreground'
+                                )}
+                                title={collapsed ? list.name : undefined}
+                              >
+                                {!collapsed && (
+                                  <div
+                                    {...dragHandleProps}
+                                    className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity px-0.5"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <div
+                                  className={cn("rounded-sm flex-shrink-0 ml-1", collapsed ? "h-4 w-4" : "h-3 w-3")}
+                                  style={{ backgroundColor: list.color }}
+                                />
+                                {!collapsed && (
+                                  <>
+                                    <span className="flex-1 text-left truncate ml-2">{list.name}</span>
+                                    {list.incomplete_count > 0 && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {list.incomplete_count}
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setListMenuOpen(listMenuOpen === list.id ? null : list.id);
+                                      }}
+                                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+                                    >
+                                      <MoreVertical className="h-3.5 w-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setListMenuOpen(listMenuOpen === list.id ? null : list.id);
-                              }}
-                              className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
-                            >
-                              <MoreVertical className="h-3.5 w-3.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
 
-                    {/* Dropdown Menu */}
-                    {listMenuOpen === list.id && (
-                      <div className="absolute right-2 top-full mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden min-w-[120px]">
-                        <button
-                          onClick={() => handleStartRename(list)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent transition-colors"
-                        >
-                          <Pencil className="h-3 w-3" />
-                          Rename
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteList(e, list.id)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent text-destructive transition-colors"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                            {/* Dropdown Menu */}
+                            {listMenuOpen === list.id && (
+                              <div className="absolute right-2 top-full mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden min-w-[120px]">
+                                <button
+                                  onClick={() => handleStartRename(list)}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent transition-colors"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                  Rename
+                                </button>
+                                <button
+                                  onClick={(e) => handleDeleteList(e, list.id)}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent text-destructive transition-colors"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </SortableSidebarItem>
+                    ))}
+                  </SortableContext>
+                </DndContext>
 
                 {/* New List Input */}
                 {!collapsed && (
@@ -937,49 +1086,64 @@ export function Sidebar({ selectedListId, onSelectList, selectedGoalId, onSelect
 
             {(collapsed || goalsExpanded) && (
               <div className={cn(!collapsed && "ml-2")}>
-                {goals.map((goal) => (
-                  <button
-                    key={goal.id}
-                    onClick={() => {
-                      onSelectGoal(goal);
-                    }}
-                    className={cn(
-                      'w-full flex items-center rounded-md text-sm transition-colors',
-                      collapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2',
-                      selectedGoalId === goal.id
-                        ? 'bg-accent text-accent-foreground'
-                        : 'hover:bg-accent/50 text-muted-foreground'
-                    )}
-                    title={collapsed ? goal.name : undefined}
-                  >
-                    <Target
-                      className={cn('h-4 w-4 flex-shrink-0', TIMEFRAME_COLORS[goal.timeframe])}
-                    />
-                    {!collapsed && (
-                      <>
-                        <div className="flex-1 text-left min-w-0">
-                          <div className="truncate">{goal.name}</div>
-                          {goal.total_tasks > 0 && (
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
-                                <div
-                                  className={cn(
-                                    'h-full rounded-full',
-                                    goal.progress_percentage === 100 ? 'bg-green-500' : 'bg-primary'
-                                  )}
-                                  style={{ width: `${goal.progress_percentage}%` }}
-                                />
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleGoalDragEnd}>
+                  <SortableContext items={goals.map(g => g.id)} strategy={verticalListSortingStrategy}>
+                    {goals.map((goal) => (
+                      <SortableSidebarItem key={goal.id} id={goal.id}>
+                        {({ dragHandleProps, isDragging }) => (
+                          <div
+                            className={cn(
+                              'group flex items-center rounded-md text-sm transition-colors cursor-pointer',
+                              collapsed ? 'justify-center p-2' : 'gap-1 px-1 py-2',
+                              selectedGoalId === goal.id
+                                ? 'bg-accent text-accent-foreground'
+                                : 'hover:bg-accent/50 text-muted-foreground',
+                              isDragging && 'opacity-50 bg-accent shadow-lg'
+                            )}
+                            onClick={() => onSelectGoal(goal)}
+                            title={collapsed ? goal.name : undefined}
+                          >
+                            {!collapsed && (
+                              <div
+                                {...dragHandleProps}
+                                className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity px-0.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
                               </div>
-                              <span className="text-xs text-muted-foreground flex-shrink-0">
-                                {goal.completed_tasks}/{goal.total_tasks}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </button>
-                ))}
+                            )}
+                            <Target
+                              className={cn('h-4 w-4 flex-shrink-0 ml-1', TIMEFRAME_COLORS[goal.timeframe])}
+                            />
+                            {!collapsed && (
+                              <>
+                                <div className="flex-1 text-left min-w-0 ml-2">
+                                  <div className="truncate">{goal.name}</div>
+                                  {goal.total_tasks > 0 && (
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
+                                        <div
+                                          className={cn(
+                                            'h-full rounded-full',
+                                            goal.progress_percentage === 100 ? 'bg-green-500' : 'bg-primary'
+                                          )}
+                                          style={{ width: `${goal.progress_percentage}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                                        {goal.completed_tasks}/{goal.total_tasks}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </SortableSidebarItem>
+                    ))}
+                  </SortableContext>
+                </DndContext>
 
                 {/* New Goal Input */}
                 {!collapsed && (

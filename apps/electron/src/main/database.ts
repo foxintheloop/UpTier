@@ -67,6 +67,16 @@ function runMigrations(database: Database.Database): void {
     database.exec('ALTER TABLE tasks ADD COLUMN recurrence_end_date TEXT');
     dbLog.info('Migration: added recurrence_end_date column to tasks');
   }
+
+  // Add position column to goals if missing (for sidebar reordering)
+  const goalColumns = database.prepare("PRAGMA table_info(goals)").all() as Array<{ name: string }>;
+  if (!goalColumns.some(c => c.name === 'position')) {
+    database.exec('ALTER TABLE goals ADD COLUMN position INTEGER DEFAULT 0');
+    const goals = database.prepare("SELECT id FROM goals WHERE status = 'active' ORDER BY timeframe, name").all() as Array<{ id: string }>;
+    const stmt = database.prepare('UPDATE goals SET position = ? WHERE id = ?');
+    goals.forEach((g, i) => stmt.run(i, g.id));
+    dbLog.info('Migration: added position column to goals');
+  }
 }
 
 function openDatabase(dbPath: string): Database.Database {

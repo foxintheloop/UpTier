@@ -671,6 +671,33 @@ function reorderTasks(listId: string, taskIds: string[]): void {
   ipcLog.info('Tasks reordered', { listId, taskCount: taskIds.length });
 }
 
+function reorderLists(listIds: string[]): void {
+  const db = getDb();
+  const stmt = db.prepare('UPDATE lists SET position = ? WHERE id = ? AND is_smart_list = 0');
+  db.transaction(() => {
+    listIds.forEach((id, index) => stmt.run(index, id));
+  })();
+  ipcLog.info('Lists reordered', { count: listIds.length });
+}
+
+function reorderSmartLists(listIds: string[]): void {
+  const db = getDb();
+  const stmt = db.prepare('UPDATE lists SET position = ? WHERE id = ? AND is_smart_list = 1');
+  db.transaction(() => {
+    listIds.forEach((id, index) => stmt.run(index, id));
+  })();
+  ipcLog.info('Smart lists reordered', { count: listIds.length });
+}
+
+function reorderGoals(goalIds: string[]): void {
+  const db = getDb();
+  const stmt = db.prepare('UPDATE goals SET position = ? WHERE id = ?');
+  db.transaction(() => {
+    goalIds.forEach((id, index) => stmt.run(index, id));
+  })();
+  ipcLog.info('Goals reordered', { count: goalIds.length });
+}
+
 // ============================================================================
 // Goals
 // ============================================================================
@@ -687,10 +714,13 @@ function createGoal(input: CreateGoalInput): Goal {
 
   ipcLog.debug('Creating goal', { name: input.name, timeframe: input.timeframe });
 
+  const maxPos = db.prepare("SELECT MAX(position) as max FROM goals WHERE status = 'active'").get() as { max: number | null };
+  const position = (maxPos.max ?? -1) + 1;
+
   db.prepare(`
-    INSERT INTO goals (id, name, description, timeframe, target_date, parent_goal_id, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-  `).run(id, input.name, input.description ?? null, input.timeframe, input.target_date ?? null, input.parent_goal_id ?? null, now, now);
+    INSERT INTO goals (id, name, description, timeframe, target_date, parent_goal_id, status, position, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+  `).run(id, input.name, input.description ?? null, input.timeframe, input.target_date ?? null, input.parent_goal_id ?? null, position, now, now);
 
   ipcLog.info('Goal created', { id, name: input.name });
   return db.prepare('SELECT * FROM goals WHERE id = ?').get(id) as Goal;
@@ -731,7 +761,7 @@ function getGoalProgress(goalId: string): GoalWithProgress | null {
 
 function getAllGoalsWithProgress(): GoalWithProgress[] {
   const db = getDb();
-  const goals = db.prepare("SELECT * FROM goals WHERE status = 'active' ORDER BY timeframe, name").all() as Goal[];
+  const goals = db.prepare("SELECT * FROM goals WHERE status = 'active' ORDER BY position ASC, timeframe, name").all() as Goal[];
 
   return goals.map((goal) => {
     const stats = db.prepare(`
@@ -1261,12 +1291,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('lists:create', withLogging('lists:create', (_, input: CreateListInput) => createList(input)));
   ipcMain.handle('lists:update', withLogging('lists:update', (_, id: string, input: UpdateListInput) => updateList(id, input)));
   ipcMain.handle('lists:delete', withLogging('lists:delete', (_, id: string) => deleteList(id)));
+  ipcMain.handle('lists:reorder', withLogging('lists:reorder', (_, ids: string[]) => reorderLists(ids)));
 
   // Smart Lists (Custom Filters)
   ipcMain.handle('smartLists:getAll', withLogging('smartLists:getAll', () => getCustomSmartLists()));
   ipcMain.handle('smartLists:create', withLogging('smartLists:create', (_, input: CreateSmartListInput) => createSmartList(input)));
   ipcMain.handle('smartLists:update', withLogging('smartLists:update', (_, id: string, input: UpdateSmartListInput) => updateSmartList(id, input)));
   ipcMain.handle('smartLists:delete', withLogging('smartLists:delete', (_, id: string) => deleteSmartList(id)));
+  ipcMain.handle('smartLists:reorder', withLogging('smartLists:reorder', (_, ids: string[]) => reorderSmartLists(ids)));
 
   // Tasks
   ipcMain.handle('tasks:getByList', withLogging('tasks:getByList', (_, options: GetTasksOptions) => getTasks(options)));
@@ -1286,6 +1318,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('goals:create', withLogging('goals:create', (_, input: CreateGoalInput) => createGoal(input)));
   ipcMain.handle('goals:update', withLogging('goals:update', (_, id: string, input: UpdateGoalInput) => updateGoal(id, input)));
   ipcMain.handle('goals:delete', withLogging('goals:delete', (_, id: string) => deleteGoal(id)));
+  ipcMain.handle('goals:reorder', withLogging('goals:reorder', (_, ids: string[]) => reorderGoals(ids)));
   ipcMain.handle('goals:linkTasks', withLogging('goals:linkTasks', (_, goalId: string, taskIds: string[], strength: number) => linkTasksToGoal(goalId, taskIds, strength)));
   ipcMain.handle('goals:getProgress', withLogging('goals:getProgress', (_, goalId: string) => getGoalProgress(goalId)));
   ipcMain.handle('goals:getTasks', withLogging('goals:getTasks', (_, goalId: string) => getTasksByGoal(goalId)));

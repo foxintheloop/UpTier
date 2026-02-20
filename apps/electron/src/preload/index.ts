@@ -180,6 +180,7 @@ const electronAPI = {
     create: (input: CreateListInput): Promise<List> => ipcRenderer.invoke('lists:create', input),
     update: (id: string, input: UpdateListInput): Promise<List | null> => ipcRenderer.invoke('lists:update', id, input),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('lists:delete', id),
+    reorder: (ids: string[]): Promise<void> => ipcRenderer.invoke('lists:reorder', ids),
   },
 
   // Smart Lists (Custom Filters)
@@ -188,6 +189,7 @@ const electronAPI = {
     create: (input: CreateSmartListInput): Promise<List> => ipcRenderer.invoke('smartLists:create', input),
     update: (id: string, input: UpdateSmartListInput): Promise<List | null> => ipcRenderer.invoke('smartLists:update', id, input),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('smartLists:delete', id),
+    reorder: (ids: string[]): Promise<void> => ipcRenderer.invoke('smartLists:reorder', ids),
   },
 
   // Tasks
@@ -226,6 +228,7 @@ const electronAPI = {
       ipcRenderer.invoke('goals:linkTasks', goalId, taskIds, strength ?? 3),
     getProgress: (goalId: string): Promise<GoalWithProgress | null> => ipcRenderer.invoke('goals:getProgress', goalId),
     getTasks: (goalId: string): Promise<TaskWithGoals[]> => ipcRenderer.invoke('goals:getTasks', goalId),
+    reorder: (ids: string[]): Promise<void> => ipcRenderer.invoke('goals:reorder', ids),
   },
 
   // Subtasks

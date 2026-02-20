@@ -49,6 +49,7 @@ export interface Goal {
   target_date: string | null;
   parent_goal_id: string | null;
   status: GoalStatus;
+  position: number;
   created_at: string;
   updated_at: string;
 }
@@ -156,6 +157,7 @@ export interface UpdateGoalInput {
   target_date?: string | null;
   parent_goal_id?: string | null;
   status?: GoalStatus;
+  position?: number;
 }
 
 export interface CreateTaskInput {
