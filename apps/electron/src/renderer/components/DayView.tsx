@@ -11,8 +11,8 @@ import type { TaskWithGoals } from '@uptier/shared';
 // Constants
 // ============================================================================
 
-const DAY_START_HOUR = 6;
-const DAY_END_HOUR = 22;
+const DAY_START_HOUR = 0;
+const DAY_END_HOUR = 24;
 const HOUR_HEIGHT_PX = 80;
 const SNAP_MINUTES = 15;
 const TOTAL_HOURS = DAY_END_HOUR - DAY_START_HOUR;
