@@ -255,7 +255,12 @@ export default function App() {
     if (!selectedTask) return;
     const taskToDelete = selectedTask;
     setSelectedTask(null);
-    queryClient.invalidateQueries({ queryKey: ['lists'] });
+
+    // Optimistically remove the task from cache so it disappears immediately
+    queryClient.setQueriesData<TaskWithGoals[]>({ queryKey: ['tasks'] }, (old) =>
+      old?.filter((t) => t.id !== taskToDelete.id)
+    );
+    queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
 
     undoableDelete({
       label: taskToDelete.title,
@@ -265,6 +270,7 @@ export default function App() {
         queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       },
       onUndo: () => {
+        // Task still exists in DB — just refetch to restore it
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
         queryClient.invalidateQueries({ queryKey: ['lists'] });
         queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
@@ -303,6 +309,9 @@ export default function App() {
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip most shortcuts when a modal overlay is active
+      if (dailyPlanningOpen) return;
+
       // Ctrl/Cmd + K: Toggle command palette (works from any context)
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
@@ -392,7 +401,7 @@ export default function App() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedTask, getCurrentTaskIndex, handleToggleComplete, handleDeleteTask]);
+  }, [selectedTask, getCurrentTaskIndex, handleToggleComplete, handleDeleteTask, dailyPlanningOpen]);
 
   // Show onboarding wizard for new users
   if (showOnboarding) {

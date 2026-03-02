@@ -1,24 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
-import { GripVertical, X, Plus, ListChecks } from 'lucide-react';
+import { X, Plus, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Subtask } from '@uptier/shared';
 
@@ -26,7 +10,7 @@ interface SubtaskListProps {
   taskId: string;
 }
 
-function SortableSubtaskItem({
+function SubtaskItem({
   subtask,
   onComplete,
   onDelete,
@@ -35,36 +19,10 @@ function SortableSubtaskItem({
   onComplete: (completed: boolean) => void;
   onDelete: () => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: subtask.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        'group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent/50 transition-colors',
-        isDragging && 'opacity-50 bg-accent shadow-md'
-      )}
-      {...attributes}
+      className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent/50 transition-colors"
     >
-      <div
-        {...listeners}
-        className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
-      >
-        <GripVertical className="h-3 w-3 text-muted-foreground" />
-      </div>
       <Checkbox
         checked={subtask.completed}
         onCheckedChange={(checked) => onComplete(checked === true)}
@@ -91,11 +49,6 @@ function SortableSubtaskItem({
 export function SubtaskList({ taskId }: SubtaskListProps) {
   const [newTitle, setNewTitle] = useState('');
   const queryClient = useQueryClient();
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
 
   const { data: subtasks = [] } = useQuery<Subtask[]>({
     queryKey: ['subtasks', taskId],
@@ -140,15 +93,6 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
     }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    // Reorder locally — the subtask API doesn't have a reorder endpoint,
-    // so we just refetch after any mutation. For now, order is by position field.
-    // TODO: Add subtasks:reorder IPC handler for persistent drag reorder
-  };
-
   const completedCount = subtasks.filter((s) => s.completed).length;
   const totalCount = subtasks.length;
 
@@ -176,27 +120,16 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 
       {/* Subtask list */}
       {subtasks.length > 0 && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={subtasks.map((s) => s.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-0.5">
-              {subtasks.map((subtask) => (
-                <SortableSubtaskItem
-                  key={subtask.id}
-                  subtask={subtask}
-                  onComplete={(completed) => handleComplete(subtask, completed)}
-                  onDelete={() => deleteMutation.mutate(subtask.id)}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+        <div className="space-y-0.5">
+          {subtasks.map((subtask) => (
+            <SubtaskItem
+              key={subtask.id}
+              subtask={subtask}
+              onComplete={(completed) => handleComplete(subtask, completed)}
+              onDelete={() => deleteMutation.mutate(subtask.id)}
+            />
+          ))}
+        </div>
       )}
 
       {/* Quick add */}

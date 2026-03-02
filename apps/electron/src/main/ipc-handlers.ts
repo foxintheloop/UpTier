@@ -411,12 +411,13 @@ function searchTasks(query: string, limit: number = 20, includeCompleted: boolea
   const db = getDb();
   ipcLog.debug('Searching tasks', { query, limit, includeCompleted });
 
-  const likeParam = `%${query}%`;
+  const escaped = query.replace(/[%_\\]/g, '\\$&');
+  const likeParam = `%${escaped}%`;
   const conditions: string[] = [
-    `(t.title LIKE ? OR EXISTS (
+    `(t.title LIKE ? ESCAPE '\\' OR EXISTS (
       SELECT 1 FROM task_tags tt
       JOIN tags tg ON tg.id = tt.tag_id
-      WHERE tt.task_id = t.id AND tg.name LIKE ?
+      WHERE tt.task_id = t.id AND tg.name LIKE ? ESCAPE '\\'
     ))`,
   ];
   const params: unknown[] = [likeParam, likeParam];
@@ -613,6 +614,10 @@ function updateTask(id: string, input: UpdateTaskInput): Task | null {
   }
 
   if (updates.length === 0) return db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as Task;
+
+  // Always update the timestamp when any field changes
+  updates.push('updated_at = ?');
+  values.push(nowISO());
 
   ipcLog.debug('Updating task', { id, fields: updates.length });
 

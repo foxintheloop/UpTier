@@ -146,7 +146,7 @@ export function DailyPlanning({ onClose, onComplete, initialDate, initialMode }:
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
+  }, [onClose, step]);
 
   const isInputFocused = () => {
     const el = document.activeElement;

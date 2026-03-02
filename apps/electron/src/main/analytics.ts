@@ -40,7 +40,7 @@ export function getTodaySummary(): TodaySummary {
   log.info('Getting today summary', { today });
 
   const completed = db.prepare(
-    `SELECT COUNT(*) as cnt FROM tasks WHERE completed = 1 AND date(completed_at) = ?`
+    `SELECT COUNT(*) as cnt FROM tasks WHERE completed = 1 AND date(completed_at, 'localtime') = ?`
   ).get(today) as { cnt: number };
 
   const planned = db.prepare(
@@ -48,7 +48,7 @@ export function getTodaySummary(): TodaySummary {
   ).get(today) as { cnt: number };
 
   const focus = db.prepare(
-    `SELECT COALESCE(SUM(duration_minutes), 0) as total FROM focus_sessions WHERE date(started_at) = ? AND completed = 1`
+    `SELECT COALESCE(SUM(duration_minutes), 0) as total FROM focus_sessions WHERE date(started_at, 'localtime') = ? AND completed = 1`
   ).get(today) as { total: number };
 
   const tiers = db.prepare(`
@@ -80,13 +80,13 @@ export function getWeeklyTrend(): WeeklyTrend {
   log.info('Getting weekly trend', { from: weekAgo, to: today });
 
   const rows = db.prepare(`
-    SELECT date(completed_at) as day, COUNT(*) as cnt
+    SELECT date(completed_at, 'localtime') as day, COUNT(*) as cnt
     FROM tasks
     WHERE completed = 1
       AND completed_at IS NOT NULL
-      AND date(completed_at) >= ?
-      AND date(completed_at) <= ?
-    GROUP BY date(completed_at)
+      AND date(completed_at, 'localtime') >= ?
+      AND date(completed_at, 'localtime') <= ?
+    GROUP BY date(completed_at, 'localtime')
   `).all(weekAgo, today) as Array<{ day: string; cnt: number }>;
 
   const countMap = new Map<string, number>();
@@ -113,7 +113,7 @@ export function getStreakInfo(): StreakInfo {
   log.info('Getting streak info');
 
   const rows = db.prepare(`
-    SELECT DISTINCT date(completed_at) as day
+    SELECT DISTINCT date(completed_at, 'localtime') as day
     FROM tasks
     WHERE completed = 1 AND completed_at IS NOT NULL
     ORDER BY day DESC
@@ -174,7 +174,6 @@ function calculateLongestStreak(rows: Array<{ day: string }>): number {
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1].day;
     const curr = sorted[i].day;
-    const expectedNext = subtractDays(curr, -0); // curr itself
     const dayAfterPrev = subtractDays(prev, -1); // prev + 1
 
     if (dayAfterPrev === curr) {
@@ -195,7 +194,7 @@ export function getFocusGoalProgress(): FocusGoalProgress {
   const dailyGoalMinutes = settings.analytics?.dailyFocusGoalMinutes ?? 120;
 
   const focus = db.prepare(
-    `SELECT COALESCE(SUM(duration_minutes), 0) as total FROM focus_sessions WHERE date(started_at) = ? AND completed = 1`
+    `SELECT COALESCE(SUM(duration_minutes), 0) as total FROM focus_sessions WHERE date(started_at, 'localtime') = ? AND completed = 1`
   ).get(today) as { total: number };
 
   const progressPercent = dailyGoalMinutes > 0
