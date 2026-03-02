@@ -22,25 +22,35 @@ Pre-built installer available. No build required.
 
 ### Task Management
 - **Lists & Tasks** - Create custom lists, tasks with subtasks, and organize your work
-- **Smart Lists** - Built-in views for My Day, Important, Planned, and Completed tasks
+- **Smart Lists** - Built-in views for My Day, Important, Planned, Calendar, Dashboard, and Completed
 - **Custom Filters** - Create your own smart lists with visual filter rules (due date, priority, tags, energy, and more)
 - **Tags** - Categorize tasks with colored tags for easy filtering
 - **Due Dates** - Set due dates with notifications and overdue tracking
 - **Recurring Tasks** - Daily, weekday, weekly, biweekly, and monthly recurrence with optional end dates
-- **Day Planner** - Time-blocking calendar view with hourly grid, drag-and-drop scheduling, and block resizing
+- **Calendar Views** - Day, Business Week, Full Week, and Month views with task scheduling
+- **Day Planner** - Time-blocking hourly grid with drag-and-drop scheduling and 15-minute snap intervals
+- **Daily Planning** - Guided 4-step planning ritual: review yesterday, build your list, schedule tasks, confirm your plan
 - **Task Duration** - Set estimated duration for tasks to size time blocks on the calendar
 - **Drag & Drop** - Reorder tasks within lists and schedule tasks onto the calendar
 
 ### AI-Powered Features
-- **Intelligent Prioritization** - Let Claude analyze and prioritize your tasks
+- **Intelligent Prioritization** - Let Claude analyze and prioritize your tasks via MCP
 - **Multiple Strategies** - Eisenhower matrix, quick wins, high impact, and more
-- **Auto-Suggestions** - Get AI recommendations for task organization
+- **Due Date Suggestions** - In-app AI suggests due dates based on similar tasks and priority
+- **Task Breakdown** - AI-generated subtask suggestions for common task types (no Claude required)
+- **At-Risk Alerts** - Amber and red warnings on tasks that may miss their deadlines
 
 ### Organization
-- **Goal Tracking** - Link tasks to goals and track progress
+- **Goal Tracking** - Link tasks to goals and track progress with hierarchy support
 - **Priority Tiers** - Three-tier system (Do Now, Do Soon, Backlog)
 - **Priority Scoring** - Rate tasks by effort, impact, urgency, and importance
-- **Data Export** - Export your data for backup or analysis
+- **Data Export** - Export your data as JSON (full backup) or CSV (tasks)
+
+### Productivity & Analytics
+- **Dashboard** - Productivity analytics with completion stats, weekly trends, and priority distribution
+- **Streaks & Celebrations** - Track daily completion streaks with confetti celebrations on milestones
+- **Focus Time Tracking** - Set a daily focus goal and track progress on the dashboard
+- **Feature Tiers** - Onboarding wizard for new users with Basic, Intermediate, and Advanced presets
 
 ### Multi-Database Support
 - **Multiple Profiles** - Create separate databases for work, personal, projects
@@ -54,9 +64,9 @@ Pre-built installer available. No build required.
 - **Keyboard Controls** - Space to pause/resume, Esc to end session
 
 ### User Experience
-- **Themes** - Dark, Light, Earth Dark, Earth Light, and Cyberpunk themes
+- **Themes** - Dark, Light, Earth Dark, Earth Light, Cyberpunk, and System themes
 - **Command Palette** - Global search and navigation with Ctrl+K
-- **Keyboard Shortcuts** - Quick actions with Ctrl+F (search), Ctrl+N (new task)
+- **Keyboard Shortcuts** - Quick actions with Ctrl+F (search), Ctrl+N (new task), ? (help)
 - **System Tray** - Minimize to tray for quick access
 - **Concurrent Access** - SQLite with WAL mode lets both the app and Claude work simultaneously
 
@@ -265,6 +275,7 @@ Application logs are stored at:
 | `Space` | Toggle task completion |
 | `Delete` | Delete selected task |
 | `Escape` | Close detail panel |
+| `?` | Show keyboard shortcuts |
 
 ### Focus Timer Shortcuts
 
@@ -276,18 +287,24 @@ Application logs are stored at:
 ## Roadmap
 
 - [x] Smart lists (My Day, Important, Planned, Completed)
-- [x] Themes (Dark, Light, Earth, Cyberpunk)
+- [x] Themes (Dark, Light, Earth, Cyberpunk, System)
 - [x] Keyboard shortcuts
 - [x] Tags
 - [x] Due date notifications
 - [x] Multiple database profiles
-- [x] Data export
+- [x] Data export & import
 - [x] List rename/delete
 - [x] Focus timer
 - [x] Resizable panels
 - [x] Recurring tasks
 - [x] Custom smart list filters
-- [ ] Calendar integration
+- [x] Calendar views (Day, Business Week, Full Week, Month)
+- [x] Daily planning ritual
+- [x] Productivity dashboard & analytics
+- [x] Streaks & celebrations
+- [x] At-risk deadline alerts
+- [x] Feature tiers & onboarding wizard
+- [x] Goal tracking with hierarchy
 - [ ] Task templates
 - [ ] Mobile companion app
 

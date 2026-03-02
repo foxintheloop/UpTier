@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS goals (
     target_date TEXT,
     parent_goal_id TEXT REFERENCES goals(id) ON DELETE SET NULL,
     status TEXT DEFAULT 'active' CHECK(status IN ('active', 'completed', 'abandoned')),
+    position INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
 );

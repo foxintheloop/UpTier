@@ -49,6 +49,12 @@ export type {
   StartFocusSessionInput,
   EndFocusSessionInput,
   FocusSessionWithTask,
+  // Analytics Types
+  TodaySummary,
+  WeeklyTrend,
+  StreakInfo,
+  FocusGoalProgress,
+  DashboardData,
 } from './types.js';
 
 // Constants

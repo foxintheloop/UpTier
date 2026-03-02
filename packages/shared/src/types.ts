@@ -49,6 +49,7 @@ export interface Goal {
   target_date: string | null;
   parent_goal_id: string | null;
   status: GoalStatus;
+  position: number;
   created_at: string;
   updated_at: string;
 }
@@ -156,6 +157,7 @@ export interface UpdateGoalInput {
   target_date?: string | null;
   parent_goal_id?: string | null;
   status?: GoalStatus;
+  position?: number;
 }
 
 export interface CreateTaskInput {
@@ -197,6 +199,7 @@ export interface UpdateTaskInput {
   recurrence_rule?: string | null;
   recurrence_end_date?: string | null;
   position?: number;
+  list_id?: string;
 }
 
 export interface BulkPriorityUpdate {
@@ -358,4 +361,40 @@ export interface EndFocusSessionInput {
 
 export interface FocusSessionWithTask extends FocusSession {
   task_title: string;
+}
+
+// ============================================================================
+// Analytics Types
+// ============================================================================
+
+export interface TodaySummary {
+  completedCount: number;
+  plannedCount: number;
+  completionRate: number;
+  focusMinutes: number;
+  tierBreakdown: { tier1: number; tier2: number; tier3: number; unset: number };
+}
+
+export interface WeeklyTrend {
+  days: Array<{ date: string; dayLabel: string; completedCount: number }>;
+}
+
+export interface StreakInfo {
+  currentStreak: number;
+  longestStreak: number;
+  lastCompletionDate: string | null;
+  milestoneReached: number | null;
+}
+
+export interface FocusGoalProgress {
+  dailyGoalMinutes: number;
+  todayMinutes: number;
+  progressPercent: number;
+}
+
+export interface DashboardData {
+  todaySummary: TodaySummary;
+  weeklyTrend: WeeklyTrend;
+  streak: StreakInfo;
+  focusGoal: FocusGoalProgress;
 }

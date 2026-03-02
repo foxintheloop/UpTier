@@ -8,8 +8,16 @@ import { GoalDetail } from './components/GoalDetail';
 import { CalendarView } from './components/CalendarView';
 import { Settings } from './components/Settings';
 import { CommandPalette } from './components/CommandPalette';
+import { KeyboardShortcuts } from './components/KeyboardShortcuts';
+import { DailyPlanning } from './components/DailyPlanning';
 import { FocusTimerOverlay } from './components/FocusTimerOverlay';
+import { ProductivityDashboard } from './components/ProductivityDashboard';
+import { ConfettiCelebration } from './components/ConfettiCelebration';
+import { NewTaskDialog } from './components/NewTaskDialog';
+import { OnboardingWizard } from './components/OnboardingWizard';
 import { Toaster } from './components/ui/toaster';
+import { useFeatures, useOnboarding } from './hooks/useFeatures';
+import { undoableDelete } from './lib/undo-delete';
 import type { TaskWithGoals, GoalWithProgress, Task, List } from '@uptier/shared';
 
 // Default focus duration in minutes
@@ -73,7 +81,14 @@ export default function App() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [activeFocusSession, setActiveFocusSession] = useState<ActiveFocusSession | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [dailyPlanningOpen, setDailyPlanningOpen] = useState(false);
+  const [celebrationMessage, setCelebrationMessage] = useState<string | null>(null);
+  const [newTaskDialogOpen, setNewTaskDialogOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
+  const features = useFeatures();
+  const { completed: onboardingCompleted } = useOnboarding();
   const taskListRef = useRef<TaskListHandle>(null);
 
   // Fetch custom smart lists to detect filter views
@@ -109,6 +124,30 @@ export default function App() {
     }
   }, [windowWidth, sidebarCollapsed]);
 
+  // Show onboarding for new users
+  useEffect(() => {
+    if (showOnboarding === null) {
+      setShowOnboarding(!onboardingCompleted);
+    }
+  }, [onboardingCompleted, showOnboarding]);
+
+  // Navigate away from disabled feature views
+  useEffect(() => {
+    if (selectedListId === 'smart:calendar' && !features.calendarView) {
+      setSelectedListId('smart:my_day');
+    }
+    if (selectedListId === 'smart:dashboard' && !features.dashboard) {
+      setSelectedListId('smart:my_day');
+    }
+  }, [features, selectedListId]);
+
+  // Clear goal selection if goals feature disabled
+  useEffect(() => {
+    if (!features.goalsSystem && selectedGoal) {
+      setSelectedGoal(null);
+    }
+  }, [features.goalsSystem, selectedGoal]);
+
   // Load and apply theme on mount
   useEffect(() => {
     window.electronAPI.settings.get().then((settings) => {
@@ -132,6 +171,27 @@ export default function App() {
     applyTheme(theme);
   };
 
+  // Auto-launch daily planning if not done today
+  useEffect(() => {
+    const checkPlanning = async () => {
+      try {
+        const settings = await window.electronAPI.settings.get();
+        const planningEnabled = (settings as { planning?: { enabled?: boolean } })?.planning?.enabled ?? true;
+        if (!planningEnabled || !features.dailyPlanning) return;
+
+        const lastDate = await window.electronAPI.planning.getLastPlanningDate();
+        const today = new Date().toISOString().split('T')[0];
+        if (lastDate !== today) {
+          // Delay slightly to let the UI load first
+          setTimeout(() => setDailyPlanningOpen(true), 1000);
+        }
+      } catch {
+        // Settings may not have planning yet, ignore
+      }
+    };
+    checkPlanning();
+  }, [features.dailyPlanning]);
+
   // Listen for database changes from MCP server
   useEffect(() => {
     const unsubscribe = window.electronAPI.onDatabaseChanged(() => {
@@ -142,8 +202,10 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['subtasks'] });
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       queryClient.invalidateQueries({ queryKey: ['smartLists'] });
+      queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
       queryClient.invalidateQueries({ queryKey: ['database-profiles'] });
       queryClient.invalidateQueries({ queryKey: ['database-active'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
     });
 
     return unsubscribe;
@@ -163,21 +225,57 @@ export default function App() {
       await window.electronAPI.tasks.uncomplete(selectedTask.id);
     } else {
       await window.electronAPI.tasks.complete(selectedTask.id);
+      // Check for celebrations (only if streaks feature enabled)
+      if (features.streaksCelebrations) try {
+        const allComplete = await window.electronAPI.analytics.checkAllDailyComplete();
+        if (allComplete) {
+          setCelebrationMessage('All daily tasks complete!');
+        } else {
+          const dashboard = await window.electronAPI.analytics.getDashboard();
+          if (dashboard.streak.milestoneReached) {
+            setCelebrationMessage(`${dashboard.streak.milestoneReached}-day streak!`);
+          }
+        }
+      } catch { /* ignore analytics errors */ }
     }
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     queryClient.invalidateQueries({ queryKey: ['lists'] });
+    queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
+    queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    // Optimistically update selectedTask so detail panel reflects change immediately
+    setSelectedTask(prev => prev ? {
+      ...prev,
+      completed: !prev.completed,
+      completed_at: prev.completed ? null : new Date().toISOString(),
+    } : null);
   }, [selectedTask, queryClient]);
 
   // Handle task deletion
-  const handleDeleteTask = useCallback(async () => {
+  const handleDeleteTask = useCallback(() => {
     if (!selectedTask) return;
-    const confirmed = window.confirm(`Delete "${selectedTask.title}"?`);
-    if (confirmed) {
-      await window.electronAPI.tasks.delete(selectedTask.id);
-      setSelectedTask(null);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['lists'] });
-    }
+    const taskToDelete = selectedTask;
+    setSelectedTask(null);
+
+    // Optimistically remove the task from cache so it disappears immediately
+    queryClient.setQueriesData<TaskWithGoals[]>({ queryKey: ['tasks'] }, (old) =>
+      old?.filter((t) => t.id !== taskToDelete.id)
+    );
+    queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
+
+    undoableDelete({
+      label: taskToDelete.title,
+      onDelete: () => {
+        window.electronAPI.tasks.delete(taskToDelete.id);
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
+      },
+      onUndo: () => {
+        // Task still exists in DB — just refetch to restore it
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
+      },
+    });
   }, [selectedTask, queryClient]);
 
   // Handle starting a focus session
@@ -211,6 +309,9 @@ export default function App() {
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip most shortcuts when a modal overlay is active
+      if (dailyPlanningOpen) return;
+
       // Ctrl/Cmd + K: Toggle command palette (works from any context)
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
@@ -222,10 +323,10 @@ export default function App() {
       const target = e.target as HTMLElement;
       const isInputActive = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
-      // Ctrl/Cmd + N: Focus quick add
+      // Ctrl/Cmd + N: New task
       if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
-        taskListRef.current?.focusQuickAdd();
+        setNewTaskDialogOpen(true);
         return;
       }
 
@@ -246,6 +347,12 @@ export default function App() {
 
       // Skip navigation shortcuts when typing
       if (isInputActive) return;
+
+      // ?: Show keyboard shortcuts reference
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        setShortcutsOpen(true);
+        return;
+      }
 
       // Arrow up: Select previous task
       if (e.key === 'ArrowUp') {
@@ -294,7 +401,12 @@ export default function App() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedTask, getCurrentTaskIndex, handleToggleComplete, handleDeleteTask]);
+  }, [selectedTask, getCurrentTaskIndex, handleToggleComplete, handleDeleteTask, dailyPlanningOpen]);
+
+  // Show onboarding wizard for new users
+  if (showOnboarding) {
+    return <OnboardingWizard onComplete={() => setShowOnboarding(false)} />;
+  }
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -313,6 +425,8 @@ export default function App() {
         }}
         onSettingsClick={() => setSettingsOpen(true)}
         onSearchClick={() => setCommandPaletteOpen(true)}
+        onPlanDay={() => setDailyPlanningOpen(true)}
+        onNewTask={() => setNewTaskDialogOpen(true)}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         width={sidebarWidth}
@@ -323,7 +437,7 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden">
         {/* Task List */}
         <div className={`flex-1 overflow-hidden ${selectedTask || selectedGoal ? 'border-r border-border' : ''}`}>
-          {selectedListId === 'smart:calendar' ? (
+          {selectedListId === 'smart:calendar' && features.calendarView ? (
             <CalendarView
               onSelectTask={(task) => {
                 setSelectedTask(task);
@@ -331,6 +445,8 @@ export default function App() {
               }}
               selectedTaskId={selectedTask?.id}
             />
+          ) : selectedListId === 'smart:dashboard' && features.dashboard ? (
+            <ProductivityDashboard />
           ) : selectedListId ? (
             <TaskList
               ref={taskListRef}
@@ -359,6 +475,7 @@ export default function App() {
             task={selectedTask}
             onClose={() => setSelectedTask(null)}
             onUpdate={(updated) => setSelectedTask(updated)}
+            onComplete={handleToggleComplete}
             onStartFocus={handleStartFocus}
             width={detailPanelWidth}
             onWidthChange={handleDetailWidthChange}
@@ -410,13 +527,33 @@ export default function App() {
           }
         }}
         onOpenSettings={() => setSettingsOpen(true)}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+        onChangeTheme={(theme) => handleThemeChange(theme as ThemeMode)}
+        onPlanDay={() => setDailyPlanningOpen(true)}
+      />
+
+      {/* Keyboard Shortcuts */}
+      <KeyboardShortcuts open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+
+      {/* New Task Dialog */}
+      <NewTaskDialog
+        open={newTaskDialogOpen}
+        onOpenChange={setNewTaskDialogOpen}
+        defaultListId={selectedListId}
+        onTaskCreated={(listId) => {
+          if (listId !== selectedListId) {
+            setSelectedListId(listId);
+            setSelectedTask(null);
+            setSelectedGoal(null);
+          }
+        }}
       />
 
       {/* Toast notifications */}
       <Toaster />
 
       {/* Focus Timer Overlay */}
-      {activeFocusSession && (
+      {activeFocusSession && features.focusTimer && (
         <FocusTimerOverlay
           task={activeFocusSession.task}
           durationMinutes={activeFocusSession.durationMinutes}
@@ -424,6 +561,32 @@ export default function App() {
           onEnd={handleEndFocus}
         />
       )}
+
+      {/* Daily Planning Overlay */}
+      {dailyPlanningOpen && features.dailyPlanning && (
+        <DailyPlanning
+          onClose={() => {
+            setDailyPlanningOpen(false);
+            const today = new Date().toISOString().split('T')[0];
+            window.electronAPI.planning.setLastPlanningDate(today);
+          }}
+          onComplete={() => {
+            setDailyPlanningOpen(false);
+            const today = new Date().toISOString().split('T')[0];
+            window.electronAPI.planning.setLastPlanningDate(today);
+            setSelectedListId('smart:my_day');
+            setSelectedTask(null);
+            setSelectedGoal(null);
+          }}
+        />
+      )}
+
+      {/* Celebration Confetti */}
+      {features.streaksCelebrations && <ConfettiCelebration
+        active={celebrationMessage !== null}
+        message={celebrationMessage ?? undefined}
+        onComplete={() => setCelebrationMessage(null)}
+      />}
     </div>
   );
 }

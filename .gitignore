@@ -29,6 +29,7 @@ release/
 # OS
 .DS_Store
 Thumbs.db
+nul
 
 # Environment
 .env
@@ -51,3 +52,6 @@ coverage/
 # Misc
 improvements.md
 settings.local.json
+
+# Documentation (local only)
+docs/

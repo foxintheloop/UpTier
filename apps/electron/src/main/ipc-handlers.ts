@@ -26,6 +26,16 @@ import {
 import type { UpTierExport, ImportPreview, ImportResult } from './export-import';
 import { suggestDueDate, suggestBreakdown, getTaskSuggestions } from './ai-suggestions';
 import type { DueDateSuggestion, BreakdownSuggestion, TaskSuggestions } from './ai-suggestions';
+import { getAtRiskTasks } from './deadline-detector';
+import {
+  getPreviousDaySummary,
+  getAvailableTasks,
+  getDayOverview,
+  getLastPlanningDate,
+  setLastPlanningDate,
+  getPlannedDates,
+  addPlannedDate,
+} from './planning';
 import {
   startFocusSession,
   endFocusSession,
@@ -33,6 +43,7 @@ import {
   getFocusSessions,
   deleteFocusSession,
 } from './focus';
+import { getDashboardData, checkAllDailyTasksCompleted } from './analytics';
 import type {
   List,
   ListWithCount,
@@ -259,6 +270,21 @@ function getSmartListTasks(smartListId: string): TaskWithGoals[] {
   });
 }
 
+function getSmartListCounts(): Record<string, number> {
+  const db = getDb();
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  const myDay = (db.prepare('SELECT COUNT(*) as count FROM tasks WHERE due_date = ? AND completed = 0').get(today) as { count: number }).count;
+  const important = (db.prepare('SELECT COUNT(*) as count FROM tasks WHERE priority_tier = 1 AND completed = 0').get() as { count: number }).count;
+  const planned = (db.prepare('SELECT COUNT(*) as count FROM tasks WHERE due_date IS NOT NULL AND completed = 0').get() as { count: number }).count;
+
+  return {
+    'smart:my_day': myDay,
+    'smart:important': important,
+    'smart:planned': planned,
+  };
+}
+
 function expandRecurringTask(task: Task, rangeStart: string, rangeEnd: string): Task[] {
   if (!task.recurrence_rule || !task.due_date) return [task];
 
@@ -381,16 +407,31 @@ function getTasksByDateRange(startDate: string, endDate: string): TaskWithGoals[
   });
 }
 
-function searchTasks(query: string, limit: number = 20): TaskWithGoals[] {
+function searchTasks(query: string, limit: number = 20, includeCompleted: boolean = false): TaskWithGoals[] {
   const db = getDb();
-  ipcLog.debug('Searching tasks', { query, limit });
+  ipcLog.debug('Searching tasks', { query, limit, includeCompleted });
+
+  const escaped = query.replace(/[%_\\]/g, '\\$&');
+  const likeParam = `%${escaped}%`;
+  const conditions: string[] = [
+    `(t.title LIKE ? ESCAPE '\\' OR EXISTS (
+      SELECT 1 FROM task_tags tt
+      JOIN tags tg ON tg.id = tt.tag_id
+      WHERE tt.task_id = t.id AND tg.name LIKE ? ESCAPE '\\'
+    ))`,
+  ];
+  const params: unknown[] = [likeParam, likeParam];
+
+  if (!includeCompleted) {
+    conditions.push('t.completed = 0');
+  }
 
   const tasks = db.prepare(`
-    SELECT * FROM tasks
-    WHERE completed = 0 AND title LIKE ?
-    ORDER BY updated_at DESC
+    SELECT t.* FROM tasks t
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY t.updated_at DESC
     LIMIT ?
-  `).all(`%${query}%`, limit) as Task[];
+  `).all(...params, limit) as Task[];
 
   const goalQuery = db.prepare(`
     SELECT tg.task_id, tg.goal_id, g.name as goal_name, tg.alignment_strength
@@ -565,7 +606,18 @@ function updateTask(id: string, input: UpdateTaskInput): Task | null {
     values.push(input.context_tags ? JSON.stringify(input.context_tags) : null);
   }
 
+  if (input.list_id !== undefined) {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM tasks WHERE list_id = ?').get(input.list_id) as { max: number | null };
+    const newPosition = (maxPos.max ?? -1) + 1;
+    updates.push('list_id = ?', 'position = ?');
+    values.push(input.list_id, newPosition);
+  }
+
   if (updates.length === 0) return db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as Task;
+
+  // Always update the timestamp when any field changes
+  updates.push('updated_at = ?');
+  values.push(nowISO());
 
   ipcLog.debug('Updating task', { id, fields: updates.length });
 
@@ -624,6 +676,33 @@ function reorderTasks(listId: string, taskIds: string[]): void {
   ipcLog.info('Tasks reordered', { listId, taskCount: taskIds.length });
 }
 
+function reorderLists(listIds: string[]): void {
+  const db = getDb();
+  const stmt = db.prepare('UPDATE lists SET position = ? WHERE id = ? AND is_smart_list = 0');
+  db.transaction(() => {
+    listIds.forEach((id, index) => stmt.run(index, id));
+  })();
+  ipcLog.info('Lists reordered', { count: listIds.length });
+}
+
+function reorderSmartLists(listIds: string[]): void {
+  const db = getDb();
+  const stmt = db.prepare('UPDATE lists SET position = ? WHERE id = ? AND is_smart_list = 1');
+  db.transaction(() => {
+    listIds.forEach((id, index) => stmt.run(index, id));
+  })();
+  ipcLog.info('Smart lists reordered', { count: listIds.length });
+}
+
+function reorderGoals(goalIds: string[]): void {
+  const db = getDb();
+  const stmt = db.prepare('UPDATE goals SET position = ? WHERE id = ?');
+  db.transaction(() => {
+    goalIds.forEach((id, index) => stmt.run(index, id));
+  })();
+  ipcLog.info('Goals reordered', { count: goalIds.length });
+}
+
 // ============================================================================
 // Goals
 // ============================================================================
@@ -640,10 +719,13 @@ function createGoal(input: CreateGoalInput): Goal {
 
   ipcLog.debug('Creating goal', { name: input.name, timeframe: input.timeframe });
 
+  const maxPos = db.prepare("SELECT MAX(position) as max FROM goals WHERE status = 'active'").get() as { max: number | null };
+  const position = (maxPos.max ?? -1) + 1;
+
   db.prepare(`
-    INSERT INTO goals (id, name, description, timeframe, target_date, parent_goal_id, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-  `).run(id, input.name, input.description ?? null, input.timeframe, input.target_date ?? null, input.parent_goal_id ?? null, now, now);
+    INSERT INTO goals (id, name, description, timeframe, target_date, parent_goal_id, status, position, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+  `).run(id, input.name, input.description ?? null, input.timeframe, input.target_date ?? null, input.parent_goal_id ?? null, position, now, now);
 
   ipcLog.info('Goal created', { id, name: input.name });
   return db.prepare('SELECT * FROM goals WHERE id = ?').get(id) as Goal;
@@ -684,7 +766,7 @@ function getGoalProgress(goalId: string): GoalWithProgress | null {
 
 function getAllGoalsWithProgress(): GoalWithProgress[] {
   const db = getDb();
-  const goals = db.prepare("SELECT * FROM goals WHERE status = 'active' ORDER BY timeframe, name").all() as Goal[];
+  const goals = db.prepare("SELECT * FROM goals WHERE status = 'active' ORDER BY position ASC, timeframe, name").all() as Goal[];
 
   return goals.map((goal) => {
     const stats = db.prepare(`
@@ -1214,12 +1296,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('lists:create', withLogging('lists:create', (_, input: CreateListInput) => createList(input)));
   ipcMain.handle('lists:update', withLogging('lists:update', (_, id: string, input: UpdateListInput) => updateList(id, input)));
   ipcMain.handle('lists:delete', withLogging('lists:delete', (_, id: string) => deleteList(id)));
+  ipcMain.handle('lists:reorder', withLogging('lists:reorder', (_, ids: string[]) => reorderLists(ids)));
 
   // Smart Lists (Custom Filters)
   ipcMain.handle('smartLists:getAll', withLogging('smartLists:getAll', () => getCustomSmartLists()));
   ipcMain.handle('smartLists:create', withLogging('smartLists:create', (_, input: CreateSmartListInput) => createSmartList(input)));
   ipcMain.handle('smartLists:update', withLogging('smartLists:update', (_, id: string, input: UpdateSmartListInput) => updateSmartList(id, input)));
   ipcMain.handle('smartLists:delete', withLogging('smartLists:delete', (_, id: string) => deleteSmartList(id)));
+  ipcMain.handle('smartLists:reorder', withLogging('smartLists:reorder', (_, ids: string[]) => reorderSmartLists(ids)));
 
   // Tasks
   ipcMain.handle('tasks:getByList', withLogging('tasks:getByList', (_, options: GetTasksOptions) => getTasks(options)));
@@ -1230,7 +1314,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:uncomplete', withLogging('tasks:uncomplete', (_, id: string) => uncompleteTask(id)));
   ipcMain.handle('tasks:reorder', withLogging('tasks:reorder', (_, listId: string, taskIds: string[]) => reorderTasks(listId, taskIds)));
   ipcMain.handle('tasks:getByDateRange', withLogging('tasks:getByDateRange', (_, startDate: string, endDate: string) => getTasksByDateRange(startDate, endDate)));
-  ipcMain.handle('tasks:search', withLogging('tasks:search', (_, query: string, limit?: number) => searchTasks(query, limit)));
+  ipcMain.handle('tasks:search', withLogging('tasks:search', (_, query: string, limit?: number, includeCompleted?: boolean) => searchTasks(query, limit, includeCompleted)));
+  ipcMain.handle('tasks:getSmartListCounts', withLogging('tasks:getSmartListCounts', () => getSmartListCounts()));
 
   // Goals
   ipcMain.handle('goals:getAll', withLogging('goals:getAll', () => getGoals()));
@@ -1238,6 +1323,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('goals:create', withLogging('goals:create', (_, input: CreateGoalInput) => createGoal(input)));
   ipcMain.handle('goals:update', withLogging('goals:update', (_, id: string, input: UpdateGoalInput) => updateGoal(id, input)));
   ipcMain.handle('goals:delete', withLogging('goals:delete', (_, id: string) => deleteGoal(id)));
+  ipcMain.handle('goals:reorder', withLogging('goals:reorder', (_, ids: string[]) => reorderGoals(ids)));
   ipcMain.handle('goals:linkTasks', withLogging('goals:linkTasks', (_, goalId: string, taskIds: string[], strength: number) => linkTasksToGoal(goalId, taskIds, strength)));
   ipcMain.handle('goals:getProgress', withLogging('goals:getProgress', (_, goalId: string) => getGoalProgress(goalId)));
   ipcMain.handle('goals:getTasks', withLogging('goals:getTasks', (_, goalId: string) => getTasksByGoal(goalId)));
@@ -1307,5 +1393,21 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('focus:getAll', withLogging('focus:getAll', (_, taskId?: string) => getFocusSessions(taskId)));
   ipcMain.handle('focus:delete', withLogging('focus:delete', (_, id: string) => deleteFocusSession(id)));
 
-  ipcLog.info('IPC handlers registered', { count: 57 });
+  // Deadline Detection
+  ipcMain.handle('deadlines:getAtRisk', withLogging('deadlines:getAtRisk', () => getAtRiskTasks()));
+
+  // Daily Planning
+  ipcMain.handle('planning:getPreviousDaySummary', withLogging('planning:getPreviousDaySummary', (_, targetDate?: string) => getPreviousDaySummary(targetDate)));
+  ipcMain.handle('planning:getAvailableTasks', withLogging('planning:getAvailableTasks', (_, targetDate?: string) => getAvailableTasks(targetDate)));
+  ipcMain.handle('planning:getDayOverview', withLogging('planning:getDayOverview', (_, targetDate?: string) => getDayOverview(targetDate)));
+  ipcMain.handle('planning:getLastPlanningDate', withLogging('planning:getLastPlanningDate', () => getLastPlanningDate()));
+  ipcMain.handle('planning:setLastPlanningDate', withLogging('planning:setLastPlanningDate', (_, date: string) => setLastPlanningDate(date)));
+  ipcMain.handle('planning:getPlannedDates', withLogging('planning:getPlannedDates', () => getPlannedDates()));
+  ipcMain.handle('planning:addPlannedDate', withLogging('planning:addPlannedDate', (_, date: string) => addPlannedDate(date)));
+
+  // Analytics
+  ipcMain.handle('analytics:getDashboard', withLogging('analytics:getDashboard', () => getDashboardData()));
+  ipcMain.handle('analytics:checkAllDailyComplete', withLogging('analytics:checkAllDailyComplete', () => checkAllDailyTasksCompleted()));
+
+  ipcLog.info('IPC handlers registered', { count: 65 });
 }

@@ -22,6 +22,7 @@ import type {
   StartFocusSessionInput,
   CreateSmartListInput,
   UpdateSmartListInput,
+  DashboardData,
 } from '@uptier/shared';
 
 // Types for settings and notifications
@@ -32,9 +33,39 @@ interface NotificationSettings {
   soundEnabled: boolean;
 }
 
+interface AnalyticsSettings {
+  dailyFocusGoalMinutes: number;
+}
+
+interface FeatureFlags {
+  priorityTiers: boolean;
+  focusTimer: boolean;
+  calendarView: boolean;
+  customSmartFilters: boolean;
+  notifications: boolean;
+  exportImport: boolean;
+  goalsSystem: boolean;
+  dashboard: boolean;
+  dailyPlanning: boolean;
+  aiSuggestions: boolean;
+  deadlineAlerts: boolean;
+  streaksCelebrations: boolean;
+  databaseProfiles: boolean;
+}
+
+type FeatureTier = 'basic' | 'intermediate' | 'advanced' | 'custom';
+
+interface OnboardingSettings {
+  completed: boolean;
+  tier: FeatureTier;
+  features: FeatureFlags;
+}
+
 interface AppSettings {
   theme: 'dark' | 'light' | 'earth-dark' | 'earth-light' | 'cyberpunk' | 'system';
   notifications: NotificationSettings;
+  analytics: AnalyticsSettings;
+  onboarding: OnboardingSettings;
 }
 
 interface UpcomingNotification {
@@ -149,6 +180,7 @@ const electronAPI = {
     create: (input: CreateListInput): Promise<List> => ipcRenderer.invoke('lists:create', input),
     update: (id: string, input: UpdateListInput): Promise<List | null> => ipcRenderer.invoke('lists:update', id, input),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('lists:delete', id),
+    reorder: (ids: string[]): Promise<void> => ipcRenderer.invoke('lists:reorder', ids),
   },
 
   // Smart Lists (Custom Filters)
@@ -157,6 +189,7 @@ const electronAPI = {
     create: (input: CreateSmartListInput): Promise<List> => ipcRenderer.invoke('smartLists:create', input),
     update: (id: string, input: UpdateSmartListInput): Promise<List | null> => ipcRenderer.invoke('smartLists:update', id, input),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('smartLists:delete', id),
+    reorder: (ids: string[]): Promise<void> => ipcRenderer.invoke('smartLists:reorder', ids),
   },
 
   // Tasks
@@ -177,8 +210,10 @@ const electronAPI = {
       ipcRenderer.invoke('tasks:removeGoal', taskId, goalId),
     getByDateRange: (startDate: string, endDate: string): Promise<TaskWithGoals[]> =>
       ipcRenderer.invoke('tasks:getByDateRange', startDate, endDate),
-    search: (query: string, limit?: number): Promise<TaskWithGoals[]> =>
-      ipcRenderer.invoke('tasks:search', query, limit),
+    search: (query: string, limit?: number, includeCompleted?: boolean): Promise<TaskWithGoals[]> =>
+      ipcRenderer.invoke('tasks:search', query, limit, includeCompleted),
+    getSmartListCounts: (): Promise<Record<string, number>> =>
+      ipcRenderer.invoke('tasks:getSmartListCounts'),
   },
 
   // Goals
@@ -193,6 +228,7 @@ const electronAPI = {
       ipcRenderer.invoke('goals:linkTasks', goalId, taskIds, strength ?? 3),
     getProgress: (goalId: string): Promise<GoalWithProgress | null> => ipcRenderer.invoke('goals:getProgress', goalId),
     getTasks: (goalId: string): Promise<TaskWithGoals[]> => ipcRenderer.invoke('goals:getTasks', goalId),
+    reorder: (ids: string[]): Promise<void> => ipcRenderer.invoke('goals:reorder', ids),
   },
 
   // Subtasks
@@ -268,6 +304,38 @@ const electronAPI = {
       ipcRenderer.invoke('database:getCurrentPath'),
   },
 
+  // Daily Planning
+  planning: {
+    getPreviousDaySummary: (targetDate?: string): Promise<{ completed: TaskWithGoals[]; incomplete: TaskWithGoals[] }> =>
+      ipcRenderer.invoke('planning:getPreviousDaySummary', targetDate),
+    getAvailableTasks: (targetDate?: string): Promise<TaskWithGoals[]> =>
+      ipcRenderer.invoke('planning:getAvailableTasks', targetDate),
+    getDayOverview: (targetDate?: string): Promise<{ scheduled: TaskWithGoals[]; unscheduled: TaskWithGoals[]; totalMinutes: number }> =>
+      ipcRenderer.invoke('planning:getDayOverview', targetDate),
+    getLastPlanningDate: (): Promise<string | null> =>
+      ipcRenderer.invoke('planning:getLastPlanningDate'),
+    setLastPlanningDate: (date: string): Promise<void> =>
+      ipcRenderer.invoke('planning:setLastPlanningDate', date),
+    getPlannedDates: (): Promise<string[]> =>
+      ipcRenderer.invoke('planning:getPlannedDates'),
+    addPlannedDate: (date: string): Promise<void> =>
+      ipcRenderer.invoke('planning:addPlannedDate', date),
+  },
+
+  // Deadline Detection
+  deadlines: {
+    getAtRisk: (): Promise<Array<{
+      id: string;
+      title: string;
+      due_date: string;
+      due_time: string | null;
+      estimated_minutes: number;
+      remaining_minutes: number;
+      risk_level: 'warning' | 'critical';
+      reason: string;
+    }>> => ipcRenderer.invoke('deadlines:getAtRisk'),
+  },
+
   // AI Suggestions
   suggestions: {
     getDueDate: (taskId: string): Promise<DueDateSuggestion | null> =>
@@ -290,6 +358,14 @@ const electronAPI = {
       ipcRenderer.invoke('focus:getAll', taskId),
     delete: (id: string): Promise<boolean> =>
       ipcRenderer.invoke('focus:delete', id),
+  },
+
+  // Analytics
+  analytics: {
+    getDashboard: (): Promise<DashboardData> =>
+      ipcRenderer.invoke('analytics:getDashboard'),
+    checkAllDailyComplete: (): Promise<boolean> =>
+      ipcRenderer.invoke('analytics:checkAllDailyComplete'),
   },
 
   // Logging API for renderer

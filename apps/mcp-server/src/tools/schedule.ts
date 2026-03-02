@@ -45,6 +45,10 @@ function computeEndTime(startTime: string, durationMinutes: number): string {
 // Schemas
 // ============================================================================
 
+const getDailyPlanningContextSchema = z.object({
+  date: z.string().optional().describe('Target date in YYYY-MM-DD format. Defaults to today if not provided.'),
+});
+
 const getDayScheduleSchema = z.object({
   date: z.string().optional().describe('Date in YYYY-MM-DD format. Defaults to today if not provided.'),
 });
@@ -277,6 +281,69 @@ Before calling this tool:
     inputSchema: unscheduleTaskSchema,
     handler: (input: z.infer<typeof unscheduleTaskSchema>) => {
       return unscheduleTask(input);
+    },
+  },
+
+  get_daily_planning_context: {
+    description: `Get full context for daily planning. Returns the previous day's summary (completed + incomplete tasks), the target day's current schedule, available tasks that could be scheduled, and free time blocks. Use this to help the user plan their day by suggesting which tasks to focus on and when to schedule them.
+
+Optionally pass a date to plan a future day (e.g., tomorrow or next Monday). Defaults to today.`,
+    inputSchema: getDailyPlanningContextSchema,
+    handler: (input: z.infer<typeof getDailyPlanningContextSchema>) => {
+      const db = getDb();
+      const targetDate = input.date || getTodayDate();
+
+      // Compute previous day relative to target
+      const targetDateObj = new Date(targetDate + 'T12:00:00');
+      const previousDateObj = new Date(targetDateObj);
+      previousDateObj.setDate(previousDateObj.getDate() - 1);
+      const previousDateStr = previousDateObj.toISOString().split('T')[0];
+
+      // Previous day's tasks
+      const previousDayRows = db.prepare(`
+        SELECT id, title, completed, priority_tier, estimated_minutes
+        FROM tasks
+        WHERE due_date = ? OR (completed_at >= ? AND completed_at < ?)
+        ORDER BY completed DESC, priority_tier ASC NULLS LAST
+      `).all(previousDateStr, previousDateStr, targetDate) as Array<{
+        id: string; title: string; completed: number;
+        priority_tier: number | null; estimated_minutes: number | null;
+      }>;
+
+      const previousCompleted = previousDayRows.filter((r) => r.completed);
+      const previousIncomplete = previousDayRows.filter((r) => !r.completed);
+
+      // Target day's schedule
+      const daySchedule = getDaySchedule({ date: targetDate });
+
+      // Available tasks for planning
+      const availableRows = db.prepare(`
+        SELECT id, title, due_date, priority_tier, estimated_minutes, energy_required
+        FROM tasks
+        WHERE completed = 0
+          AND (
+            due_date <= ?
+            OR priority_tier = 1
+            OR (due_date IS NULL AND priority_tier <= 2)
+          )
+        ORDER BY priority_tier ASC NULLS LAST, due_date ASC NULLS LAST
+      `).all(targetDate) as Array<{
+        id: string; title: string; due_date: string | null;
+        priority_tier: number | null; estimated_minutes: number | null;
+        energy_required: string | null;
+      }>;
+
+      return {
+        success: true,
+        date: targetDate,
+        previous_day: {
+          date: previousDateStr,
+          completed: previousCompleted,
+          incomplete: previousIncomplete,
+        },
+        schedule: daySchedule,
+        available_tasks: availableRows,
+      };
     },
   },
 };

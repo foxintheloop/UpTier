@@ -28,10 +28,48 @@ export interface DatabaseSettings {
   defaultProfileId: string;
 }
 
+export interface PlanningSettings {
+  lastPlanningDate: string | null;  // YYYY-MM-DD (for auto-launch check)
+  plannedDates: string[];           // YYYY-MM-DD strings of planned dates, max 90
+  enabled: boolean;                 // auto-launch toggle
+  workingHoursPerDay: number;       // default 8
+}
+
+export interface AnalyticsSettings {
+  dailyFocusGoalMinutes: number;
+}
+
+export type FeatureTier = 'basic' | 'intermediate' | 'advanced' | 'custom';
+
+export interface FeatureFlags {
+  priorityTiers: boolean;
+  focusTimer: boolean;
+  calendarView: boolean;
+  customSmartFilters: boolean;
+  notifications: boolean;
+  exportImport: boolean;
+  goalsSystem: boolean;
+  dashboard: boolean;
+  dailyPlanning: boolean;
+  aiSuggestions: boolean;
+  deadlineAlerts: boolean;
+  streaksCelebrations: boolean;
+  databaseProfiles: boolean;
+}
+
+export interface OnboardingSettings {
+  completed: boolean;
+  tier: FeatureTier;
+  features: FeatureFlags;
+}
+
 export interface AppSettings {
   theme: ThemeMode;
   notifications: NotificationSettings;
   databases: DatabaseSettings;
+  planning: PlanningSettings;
+  analytics: AnalyticsSettings;
+  onboarding: OnboardingSettings;
 }
 
 interface SettingsSchema {
@@ -73,6 +111,34 @@ const store = new Store<SettingsSchema>({
         profiles: [defaultDatabaseProfile],
         activeProfileId: DEFAULT_PROFILE_ID,
         defaultProfileId: DEFAULT_PROFILE_ID,
+      },
+      planning: {
+        lastPlanningDate: null,
+        plannedDates: [],
+        enabled: true,
+        workingHoursPerDay: 8,
+      },
+      analytics: {
+        dailyFocusGoalMinutes: 120,
+      },
+      onboarding: {
+        completed: false,
+        tier: 'advanced' as FeatureTier,
+        features: {
+          priorityTiers: true,
+          focusTimer: true,
+          calendarView: true,
+          customSmartFilters: true,
+          notifications: true,
+          exportImport: true,
+          goalsSystem: true,
+          dashboard: true,
+          dailyPlanning: true,
+          aiSuggestions: true,
+          deadlineAlerts: true,
+          streaksCelebrations: true,
+          databaseProfiles: true,
+        },
       },
     },
   },

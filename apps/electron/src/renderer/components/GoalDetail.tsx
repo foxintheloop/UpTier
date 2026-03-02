@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
+import { undoableDelete } from '@/lib/undo-delete';
 import type { GoalWithProgress, TaskWithGoals, UpdateGoalInput, Timeframe, GoalStatus } from '@uptier/shared';
 import { format, parseISO } from 'date-fns';
 
@@ -87,9 +88,16 @@ export function GoalDetail({ goal, onClose, onUpdate, onSelectTask }: GoalDetail
   };
 
   const handleDelete = () => {
-    if (window.confirm(`Delete goal "${goal.name}"? Tasks linked to this goal will be unlinked.`)) {
-      deleteMutation.mutate();
-    }
+    onClose();
+    undoableDelete({
+      label: goal.name,
+      onDelete: () => {
+        deleteMutation.mutate();
+      },
+      onUndo: () => {
+        queryClient.invalidateQueries({ queryKey: ['goals'] });
+      },
+    });
   };
 
   return (

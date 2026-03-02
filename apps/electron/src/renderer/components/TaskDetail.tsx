@@ -1,16 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, Loader2, Check, Trash2, Play, ChevronDown, Repeat } from 'lucide-react';
+import { undoableDelete } from '@/lib/undo-delete';
+import { X, CalendarIcon, Clock, Target, Zap, Gem, AlertCircle, MessageSquare, Hash, Sparkles, CalendarPlus, ListPlus, LayoutList, Loader2, Check, Trash2, Play, ChevronDown, ChevronsUpDown, Repeat, Battery, BatteryMedium, BatteryFull } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
 import { TagPicker } from './TagPicker';
 import { TagBadge } from './TagBadge';
 import { GoalPicker } from './GoalPicker';
+import { SubtaskList } from './SubtaskList';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandGroup,
+  CommandItem,
+  CommandEmpty,
+} from './ui/command';
 import { cn } from '@/lib/utils';
-import type { TaskWithGoals, UpdateTaskInput } from '@uptier/shared';
+import { useFeatures } from '../hooks/useFeatures';
+import type { TaskWithGoals, UpdateTaskInput, ListWithCount } from '@uptier/shared';
 
 const FOCUS_DURATIONS = [
   { value: 30, label: '30 min' },
@@ -29,6 +41,7 @@ interface TaskDetailProps {
   task: TaskWithGoals;
   onClose: () => void;
   onUpdate: (task: TaskWithGoals) => void;
+  onComplete?: () => void;
   onStartFocus?: (task: TaskWithGoals, durationMinutes: number) => void;
   width?: number;
   onWidthChange?: (width: number) => void;
@@ -55,8 +68,10 @@ interface BreakdownSuggestion {
   reasoning: string;
 }
 
-export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWidthChange }: TaskDetailProps) {
+export function TaskDetail({ task, onClose, onUpdate, onComplete, onStartFocus, width, onWidthChange }: TaskDetailProps) {
+  const features = useFeatures();
   const [title, setTitle] = useState(task.title);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
   const [notes, setNotes] = useState(task.notes || '');
   const [showDueDateSuggestion, setShowDueDateSuggestion] = useState(false);
   const [customDuration, setCustomDuration] = useState('');
@@ -67,7 +82,14 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
   const [breakdownSuggestion, setBreakdownSuggestion] = useState<BreakdownSuggestion | null>(null);
   const [loadingDueDate, setLoadingDueDate] = useState(false);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
+  const [listPopoverOpen, setListPopoverOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const { data: lists = [] } = useQuery<ListWithCount[]>({
+    queryKey: ['lists'],
+    queryFn: () => window.electronAPI.lists.getAll(),
+  });
+  const taskList = lists.find(l => l.id === task.list_id);
 
   useEffect(() => {
     setTitle(task.title);
@@ -77,6 +99,13 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
     setShowBreakdownSuggestion(false);
     setDueDateSuggestion(null);
     setBreakdownSuggestion(null);
+    // Auto-resize title textarea
+    requestAnimationFrame(() => {
+      if (titleRef.current) {
+        titleRef.current.style.height = 'auto';
+        titleRef.current.style.height = titleRef.current.scrollHeight + 'px';
+      }
+    });
   }, [task.id, task.title, task.notes]);
 
   // Handle resize drag
@@ -112,6 +141,8 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
     onSuccess: (updated) => {
       if (updated) {
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
         onUpdate({ ...task, ...updated });
       }
     },
@@ -128,9 +159,23 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
   });
 
   const handleDelete = () => {
-    if (window.confirm(`Delete "${task.title}"? This action cannot be undone.`)) {
-      deleteMutation.mutate();
-    }
+    onClose();
+    undoableDelete({
+      label: task.title,
+      onDelete: () => {
+        window.electronAPI.tasks.delete(task.id);
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['goals'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
+      },
+      onUndo: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['goals'] });
+        queryClient.invalidateQueries({ queryKey: ['smartListCounts'] });
+      },
+    });
   };
 
   const handleTitleBlur = () => {
@@ -192,11 +237,12 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
       for (const subtask of breakdownSuggestion.subtasks) {
         await window.electronAPI.subtasks.add(task.id, subtask.title);
       }
-      // Update estimated minutes
+      // Update estimated minutes on parent task
       await updateMutation.mutateAsync({ estimated_minutes: breakdownSuggestion.totalEstimatedMinutes });
       queryClient.invalidateQueries({ queryKey: ['subtasks', task.id] });
       setShowBreakdownSuggestion(false);
       setBreakdownSuggestion(null);
+      toast.success(`Added ${breakdownSuggestion.subtasks.length} subtasks`);
     }
   };
 
@@ -227,7 +273,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
         <h3 className="font-medium">Task Details</h3>
         <div className="flex items-center gap-2">
           {/* Focus Button with Duration Picker */}
-          {!task.completed && onStartFocus && (
+          {features.focusTimer && !task.completed && onStartFocus && (
             <Popover open={focusPopoverOpen} onOpenChange={setFocusPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1">
@@ -294,88 +340,150 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
           {/* Title */}
-          <div>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              className="text-lg font-medium border-0 px-0 focus-visible:ring-0"
-              placeholder="Task title"
+          <div className="flex items-start gap-3">
+            <Checkbox
+              checked={task.completed}
+              onCheckedChange={() => onComplete?.()}
+              className="mt-2 h-5 w-5 rounded-full"
             />
+            <div className="flex-1 min-w-0">
+              <textarea
+                ref={titleRef}
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                onBlur={handleTitleBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
+                className={cn(
+                  "w-full text-lg font-medium border-0 px-0 bg-transparent resize-none overflow-hidden focus:outline-none focus:ring-0",
+                  task.completed && "line-through text-muted-foreground"
+                )}
+                placeholder="Task title"
+                rows={1}
+              />
+            </div>
           </div>
 
-          {/* Priority Section */}
-          {task.priority_tier && (
+          <div className={cn("space-y-6", task.completed && "opacity-60")}>
+          {/* List */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <LayoutList className="h-4 w-4" />
+              List
+            </div>
+            <Popover open={listPopoverOpen} onOpenChange={setListPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between h-9 text-sm font-normal"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    {taskList && (
+                      <div className="h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: taskList.color }} />
+                    )}
+                    {taskList?.name || 'Select list...'}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" collisionPadding={8}>
+                <Command>
+                  <CommandInput placeholder="Search lists..." />
+                  <CommandList className="max-h-[min(300px,var(--radix-popover-content-available-height,300px)-44px)]">
+                    <CommandEmpty>No lists found.</CommandEmpty>
+                    <CommandGroup>
+                      {lists.map((list) => (
+                        <CommandItem
+                          key={list.id}
+                          value={list.name}
+                          onSelect={() => {
+                            if (list.id !== task.list_id) {
+                              updateMutation.mutate({ list_id: list.id });
+                            }
+                            setListPopoverOpen(false);
+                          }}
+                        >
+                          <div className="h-2.5 w-2.5 rounded-full mr-2 shrink-0"
+                            style={{ backgroundColor: list.color }} />
+                          {list.name}
+                          {list.id === task.list_id && (
+                            <Check className="ml-auto h-4 w-4" />
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Priority Tier */}
+          {features.priorityTiers && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <AlertCircle className="h-4 w-4" />
                 Priority
               </div>
-              <div
-                className={cn(
-                  'p-3 rounded-md border',
-                  task.priority_tier === 1 && 'border-red-500/30 bg-red-500/5',
-                  task.priority_tier === 2 && 'border-amber-500/30 bg-amber-500/5',
-                  task.priority_tier === 3 && 'border-gray-500/30 bg-gray-500/5'
-                )}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge
-                    variant={
-                      task.priority_tier === 1
-                        ? 'tier1'
-                        : task.priority_tier === 2
-                          ? 'tier2'
-                          : 'tier3'
-                    }
-                  >
-                    Tier {task.priority_tier} — {tierInfo?.label}
-                  </Badge>
-                </div>
-                {task.priority_reasoning && (
-                  <p className="text-sm text-muted-foreground">{task.priority_reasoning}</p>
-                )}
+              <div className="flex gap-2">
+                {([1, 2, 3] as const).map((tier) => {
+                  const info = PRIORITY_TIERS[tier];
+                  return (
+                    <button
+                      key={tier}
+                      onClick={() => updateMutation.mutate({
+                        priority_tier: task.priority_tier === tier ? null : tier,
+                      })}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors',
+                        task.priority_tier === tier
+                          ? tier === 1
+                            ? 'bg-red-500/20 border-red-500 text-red-400'
+                            : tier === 2
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                              : 'bg-gray-500/20 border-gray-500 text-gray-400'
+                          : 'border-input hover:bg-accent'
+                      )}
+                      title={info.label}
+                    >
+                      Tier {tier}
+                    </button>
+                  );
+                })}
               </div>
+              {task.priority_reasoning && (
+                <p className="text-sm text-muted-foreground">{task.priority_reasoning}</p>
+              )}
             </div>
           )}
 
           {/* Scores */}
-          {(task.effort_score || task.impact_score || task.urgency_score || task.importance_score) && (
-            <div className="space-y-2">
+          {features.priorityTiers && (
+            <div className="space-y-3">
               <div className="text-sm font-medium">Scores</div>
-              <div className="grid grid-cols-2 gap-2">
-                {task.effort_score && (
-                  <ScoreItem
-                    icon={Zap}
-                    label="Effort"
-                    value={task.effort_score}
-                    description={PRIORITY_SCALES.effort[task.effort_score as keyof typeof PRIORITY_SCALES.effort]?.label}
-                  />
-                )}
-                {task.impact_score && (
-                  <ScoreItem
-                    icon={Gem}
-                    label="Impact"
-                    value={task.impact_score}
-                    description={PRIORITY_SCALES.impact[task.impact_score as keyof typeof PRIORITY_SCALES.impact]?.label}
-                  />
-                )}
-                {task.urgency_score && (
-                  <ScoreItem
-                    icon={AlertCircle}
-                    label="Urgency"
-                    value={task.urgency_score}
-                    description={PRIORITY_SCALES.urgency[task.urgency_score as keyof typeof PRIORITY_SCALES.urgency]?.label}
-                  />
-                )}
-                {task.importance_score && (
-                  <ScoreItem
-                    icon={Target}
-                    label="Importance"
-                    value={task.importance_score}
-                    description={PRIORITY_SCALES.importance[task.importance_score as keyof typeof PRIORITY_SCALES.importance]?.label}
-                  />
-                )}
+              <div className="grid grid-cols-2 gap-3">
+                <ScoreSelector icon={Zap} label="Effort" value={task.effort_score}
+                  scale={PRIORITY_SCALES.effort}
+                  onChange={(v) => updateMutation.mutate({ effort_score: v })} />
+                <ScoreSelector icon={Gem} label="Impact" value={task.impact_score}
+                  scale={PRIORITY_SCALES.impact}
+                  onChange={(v) => updateMutation.mutate({ impact_score: v })} />
+                <ScoreSelector icon={AlertCircle} label="Urgency" value={task.urgency_score}
+                  scale={PRIORITY_SCALES.urgency}
+                  onChange={(v) => updateMutation.mutate({ urgency_score: v })} />
+                <ScoreSelector icon={Target} label="Importance" value={task.importance_score}
+                  scale={PRIORITY_SCALES.importance}
+                  onChange={(v) => updateMutation.mutate({ importance_score: v })} />
               </div>
             </div>
           )}
@@ -389,8 +497,39 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
           {/* Duration */}
           <DurationPicker task={task} onUpdate={(input) => updateMutation.mutate(input)} />
 
-          {/* Goals */}
+          {/* Energy Level */}
           <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Zap className="h-4 w-4" />
+              Energy Level
+            </div>
+            <div className="flex gap-2">
+              {([
+                { value: 'low' as const, label: 'Low', icon: Battery },
+                { value: 'medium' as const, label: 'Medium', icon: BatteryMedium },
+                { value: 'high' as const, label: 'High', icon: BatteryFull },
+              ]).map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  onClick={() => updateMutation.mutate({
+                    energy_required: task.energy_required === value ? null : value,
+                  })}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors',
+                    task.energy_required === value
+                      ? 'bg-primary/20 border-primary text-primary'
+                      : 'border-input hover:bg-accent'
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Goals */}
+          {features.goalsSystem && <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Target className="h-4 w-4" />
               Goals
@@ -415,7 +554,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
                 onGoalsChange={handleGoalsChange}
               />
             </div>
-          </div>
+          </div>}
 
           {/* Tags */}
           <div className="space-y-2">
@@ -439,6 +578,9 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
             </div>
           </div>
 
+          {/* Subtasks */}
+          <SubtaskList taskId={task.id} />
+
           {/* Notes */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -455,7 +597,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
           </div>
 
           {/* AI Suggestions */}
-          <div className="space-y-3">
+          {features.aiSuggestions && <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Sparkles className="h-4 w-4 text-primary" />
               Smart Suggestions
@@ -594,7 +736,7 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Metadata */}
           <div className="text-xs text-muted-foreground space-y-1 pt-4 border-t border-border">
@@ -603,6 +745,8 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
             {task.prioritized_at && (
               <p>Last prioritized: {format(parseUTCTimestamp(task.prioritized_at), 'PPp')}</p>
             )}
+          </div>
+
           </div>
 
           {/* Delete Button */}
@@ -623,24 +767,39 @@ export function TaskDetail({ task, onClose, onUpdate, onStartFocus, width, onWid
   );
 }
 
-interface ScoreItemProps {
+function ScoreSelector({ icon: Icon, label, value, scale, onChange }: {
   icon: React.ElementType;
   label: string;
-  value: number;
-  description?: string;
-}
-
-function ScoreItem({ icon: Icon, label, value, description }: ScoreItemProps) {
+  value: number | null;
+  scale: Record<number, { label: string }>;
+  onChange: (value: number | null) => void;
+}) {
   return (
-    <div className="flex items-center gap-2 p-2 rounded-md bg-secondary/30 text-sm">
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      <div>
-        <div className="flex items-center gap-1">
-          <span className="font-medium">{label}:</span>
-          <span>{value}/5</span>
-        </div>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
       </div>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            onClick={() => onChange(value === n ? null : n)}
+            className={cn(
+              "h-7 w-7 rounded text-xs font-medium transition-colors",
+              value === n
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary/50 hover:bg-secondary text-muted-foreground"
+            )}
+            title={scale[n]?.label}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      {value && scale[value] && (
+        <p className="text-xs text-muted-foreground">{scale[value].label}</p>
+      )}
     </div>
   );
 }
