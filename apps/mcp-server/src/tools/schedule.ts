@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getDb } from '../database.js';
+import { getDb, nowISO } from '../database.js';
 import { notifyChange } from '../changelog.js';
 import { getTaskById } from './tasks.js';
 
@@ -208,7 +208,7 @@ function scheduleTasks(input: z.infer<typeof scheduleTasksSchema>) {
 
       db.prepare(
         'UPDATE tasks SET due_date = ?, due_time = ?, estimated_minutes = ?, updated_at = ? WHERE id = ?'
-      ).run(item.date, snappedTime, duration, new Date().toISOString(), item.task_id);
+      ).run(item.date, snappedTime, duration, nowISO(), item.task_id);
 
       results.push({
         task_id: item.task_id,
@@ -236,7 +236,7 @@ function unscheduleTask(input: z.infer<typeof unscheduleTaskSchema>) {
 
   db.prepare(
     'UPDATE tasks SET due_time = NULL, updated_at = ? WHERE id = ?'
-  ).run(new Date().toISOString(), input.task_id);
+  ).run(nowISO(), input.task_id);
 
   notifyChange('task', 'update', input.task_id);
 
