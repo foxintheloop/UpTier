@@ -169,7 +169,7 @@ interface TaskSuggestions {
 }
 
 // Log preload initialization
-console.log('[preload] Preload script initializing...');
+ipcRenderer.send('log:renderer', 'debug', '[preload] Preload script initializing...');
 const startTime = performance.now();
 
 // Define the API exposed to the renderer
@@ -390,7 +390,7 @@ const electronAPI = {
   // Database change listener
   onDatabaseChanged: (callback: () => void): (() => void) => {
     const handler = () => {
-      console.log('[preload] Database changed event received');
+      ipcRenderer.send('log:renderer', 'debug', '[preload] Database changed event received');
       callback();
     };
     ipcRenderer.on('database-changed', handler);
@@ -402,7 +402,7 @@ const electronAPI = {
   // Navigate to task listener (from notification clicks)
   onNavigateToTask: (callback: (taskId: string) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, taskId: string) => {
-      console.log('[preload] Navigate to task event received', { taskId });
+      ipcRenderer.send('log:renderer', 'debug', '[preload] Navigate to task event received', { taskId });
       callback(taskId);
     };
     ipcRenderer.on('navigate-to-task', handler);
@@ -416,7 +416,7 @@ const electronAPI = {
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 
 const duration = (performance.now() - startTime).toFixed(2);
-console.log(`[preload] Preload script initialized in ${duration}ms`);
+ipcRenderer.send('log:renderer', 'info', `[preload] Preload script initialized in ${duration}ms`);
 
 // Type declaration for renderer
 export type ElectronAPI = typeof electronAPI;
