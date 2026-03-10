@@ -152,6 +152,13 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
 CREATE INDEX IF NOT EXISTS idx_focus_sessions_task ON focus_sessions(task_id);
 CREATE INDEX IF NOT EXISTS idx_focus_sessions_date ON focus_sessions(started_at);
 
+-- Additional performance indexes
+CREATE INDEX IF NOT EXISTS idx_tasks_energy ON tasks(energy_required);
+CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks(completed_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_list_status_due ON tasks(list_id, completed, due_date);
+
 -- ============================================================================
 -- Triggers for updated_at
 -- ============================================================================
