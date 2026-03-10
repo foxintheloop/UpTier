@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { DB_FILENAME, DB_DIRECTORY } from '@uptier/shared';
@@ -203,9 +204,7 @@ export function closeDb(): void {
 }
 
 export function generateId(): string {
-  return Array.from({ length: 32 }, () =>
-    Math.floor(Math.random() * 16).toString(16)
-  ).join('');
+  return randomBytes(16).toString('hex');
 }
 
 export function nowISO(): string {

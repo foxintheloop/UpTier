@@ -1,4 +1,5 @@
 import pino from 'pino';
+import { randomBytes } from 'node:crypto';
 import { join } from 'path';
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 
@@ -82,7 +83,7 @@ export function createScopedLogger(scope: string) {
 // Tool invocation timer
 export function createToolTimer(toolName: string, args?: Record<string, unknown>) {
   const startTime = performance.now();
-  const requestId = Math.random().toString(36).substring(2, 9);
+  const requestId = randomBytes(4).toString('hex');
   const toolLogger = createScopedLogger('tool');
 
   return {

@@ -1,4 +1,5 @@
 import { dialog } from 'electron';
+import { randomBytes } from 'node:crypto';
 import { writeFileSync, readFileSync } from 'fs';
 import { getDb } from './database';
 import { createScopedLogger } from './logger';
@@ -314,7 +315,7 @@ export async function executeImport(
 }
 
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return randomBytes(16).toString('hex');
 }
 
 function importUpTierFormat(

@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { randomBytes } from 'node:crypto';
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -123,9 +124,7 @@ export function closeDb(): void {
  * Generate a unique ID (UUID-like)
  */
 export function generateId(): string {
-  return Array.from({ length: 32 }, () =>
-    Math.floor(Math.random() * 16).toString(16)
-  ).join('');
+  return randomBytes(16).toString('hex');
 }
 
 /**

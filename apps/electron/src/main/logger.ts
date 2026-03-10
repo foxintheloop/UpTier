@@ -1,4 +1,5 @@
 import log from 'electron-log/main';
+import { randomBytes } from 'node:crypto';
 import { app } from 'electron';
 import path from 'path';
 
@@ -66,7 +67,7 @@ export function createScopedLogger(scope: string) {
 // IPC handler timing utility
 export function createIpcTimer(channel: string) {
   const startTime = performance.now();
-  const requestId = Math.random().toString(36).substring(2, 9);
+  const requestId = randomBytes(4).toString('hex');
 
   return {
     requestId,
