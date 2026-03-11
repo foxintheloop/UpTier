@@ -95,7 +95,7 @@ export const bulkCreateTasksSchema = z.object({
     estimated_minutes: z.number().optional(),
     energy_required: z.enum(['low', 'medium', 'high']).optional(),
     due_date: z.string().optional(),
-  })).describe('Array of tasks to create'),
+  })).min(1).max(100).describe('Array of tasks to create (max 100)'),
   add_to_my_day: z.boolean().optional().describe('Add all tasks to My Day smart list (sets due_date to today if not already set)'),
   mark_important: z.boolean().optional().describe('Mark all tasks as important (sets priority_tier to 1 if not already set)'),
 });
@@ -395,7 +395,7 @@ export function bulkCreateTasks(listId: string, tasks: Array<{
 
   transaction();
 
-  return createdIds.map((id) => getTaskById(id)!);
+  return createdIds.map((id) => getTaskById(id)).filter((t): t is Task => t !== null);
 }
 
 // ============================================================================

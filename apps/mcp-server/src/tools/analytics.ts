@@ -47,26 +47,26 @@ function getProductivityDashboard() {
   const today = getToday();
 
   // Today summary
-  const completed = db.prepare(
+  const completed = (db.prepare(
     `SELECT COUNT(*) as cnt FROM tasks WHERE completed = 1 AND date(completed_at) = ?`
-  ).get(today) as { cnt: number };
+  ).get(today) as { cnt: number } | undefined) ?? { cnt: 0 };
 
-  const planned = db.prepare(
+  const planned = (db.prepare(
     `SELECT COUNT(*) as cnt FROM tasks WHERE due_date = ?`
-  ).get(today) as { cnt: number };
+  ).get(today) as { cnt: number } | undefined) ?? { cnt: 0 };
 
-  const focus = db.prepare(
+  const focus = (db.prepare(
     `SELECT COALESCE(SUM(duration_minutes), 0) as total FROM focus_sessions WHERE date(started_at) = ? AND completed = 1`
-  ).get(today) as { total: number };
+  ).get(today) as { total: number } | undefined) ?? { total: 0 };
 
-  const tiers = db.prepare(`
+  const tiers = (db.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN priority_tier = 1 THEN 1 ELSE 0 END), 0) as tier1,
       COALESCE(SUM(CASE WHEN priority_tier = 2 THEN 1 ELSE 0 END), 0) as tier2,
       COALESCE(SUM(CASE WHEN priority_tier = 3 THEN 1 ELSE 0 END), 0) as tier3,
       COALESCE(SUM(CASE WHEN priority_tier IS NULL THEN 1 ELSE 0 END), 0) as unset
     FROM tasks WHERE due_date = ?
-  `).get(today) as { tier1: number; tier2: number; tier3: number; unset: number };
+  `).get(today) as { tier1: number; tier2: number; tier3: number; unset: number } | undefined) ?? { tier1: 0, tier2: 0, tier3: 0, unset: 0 };
 
   const completionRate = planned.cnt > 0
     ? Math.round((completed.cnt / planned.cnt) * 100)
