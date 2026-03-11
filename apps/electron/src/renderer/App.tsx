@@ -15,6 +15,7 @@ import { ProductivityDashboard } from './components/ProductivityDashboard';
 import { ConfettiCelebration } from './components/ConfettiCelebration';
 import { NewTaskDialog } from './components/NewTaskDialog';
 import { OnboardingWizard } from './components/OnboardingWizard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/toaster';
 import { useFeatures, useOnboarding } from './hooks/useFeatures';
 import { undoableDelete } from './lib/undo-delete';
@@ -411,91 +412,97 @@ export default function App() {
   return (
     <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar */}
-      <Sidebar
-        selectedListId={selectedListId}
-        onSelectList={(id) => {
-          setSelectedListId(id);
-          setSelectedTask(null);
-          setSelectedGoal(null);
-        }}
-        selectedGoalId={selectedGoal?.id ?? null}
-        onSelectGoal={(goal) => {
-          setSelectedGoal(goal);
-          setSelectedTask(null);
-        }}
-        onSettingsClick={() => setSettingsOpen(true)}
-        onSearchClick={() => setCommandPaletteOpen(true)}
-        onPlanDay={() => setDailyPlanningOpen(true)}
-        onNewTask={() => setNewTaskDialogOpen(true)}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        width={sidebarWidth}
-        onWidthChange={handleSidebarWidthChange}
-      />
+      <ErrorBoundary name="Sidebar">
+        <Sidebar
+          selectedListId={selectedListId}
+          onSelectList={(id) => {
+            setSelectedListId(id);
+            setSelectedTask(null);
+            setSelectedGoal(null);
+          }}
+          selectedGoalId={selectedGoal?.id ?? null}
+          onSelectGoal={(goal) => {
+            setSelectedGoal(goal);
+            setSelectedTask(null);
+          }}
+          onSettingsClick={() => setSettingsOpen(true)}
+          onSearchClick={() => setCommandPaletteOpen(true)}
+          onPlanDay={() => setDailyPlanningOpen(true)}
+          onNewTask={() => setNewTaskDialogOpen(true)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          width={sidebarWidth}
+          onWidthChange={handleSidebarWidthChange}
+        />
+      </ErrorBoundary>
 
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
         {/* Task List */}
-        <div className={`flex-1 overflow-hidden ${selectedTask || selectedGoal ? 'border-r border-border' : ''}`}>
-          {selectedListId === 'smart:calendar' && features.calendarView ? (
-            <CalendarView
-              onSelectTask={(task) => {
-                setSelectedTask(task);
-                setSelectedGoal(null);
-              }}
-              selectedTaskId={selectedTask?.id}
-            />
-          ) : selectedListId === 'smart:dashboard' && features.dashboard ? (
-            <ProductivityDashboard />
-          ) : selectedListId ? (
-            <TaskList
-              ref={taskListRef}
-              listId={selectedListId}
-              selectedTaskId={selectedTask?.id}
-              onSelectTask={(task) => {
-                setSelectedTask(task);
-                setSelectedGoal(null);
-              }}
-              onStartFocus={(task) => handleStartFocus(task, DEFAULT_FOCUS_DURATION)}
-              isFilterList={isCustomSmartList}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <div className="text-center">
-                <h2 className="text-xl font-semibold mb-2">Welcome to UpTier</h2>
-                <p>Select a list from the sidebar to get started</p>
+        <ErrorBoundary name="MainContent">
+          <div className={`flex-1 overflow-hidden ${selectedTask || selectedGoal ? 'border-r border-border' : ''}`}>
+            {selectedListId === 'smart:calendar' && features.calendarView ? (
+              <CalendarView
+                onSelectTask={(task) => {
+                  setSelectedTask(task);
+                  setSelectedGoal(null);
+                }}
+                selectedTaskId={selectedTask?.id}
+              />
+            ) : selectedListId === 'smart:dashboard' && features.dashboard ? (
+              <ProductivityDashboard />
+            ) : selectedListId ? (
+              <TaskList
+                ref={taskListRef}
+                listId={selectedListId}
+                selectedTaskId={selectedTask?.id}
+                onSelectTask={(task) => {
+                  setSelectedTask(task);
+                  setSelectedGoal(null);
+                }}
+                onStartFocus={(task) => handleStartFocus(task, DEFAULT_FOCUS_DURATION)}
+                isFilterList={isCustomSmartList}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <h2 className="text-xl font-semibold mb-2">Welcome to UpTier</h2>
+                  <p>Select a list from the sidebar to get started</p>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </ErrorBoundary>
 
         {/* Task Detail Panel */}
-        {selectedTask && !selectedGoal && (
-          <TaskDetail
-            task={selectedTask}
-            onClose={() => setSelectedTask(null)}
-            onUpdate={(updated) => setSelectedTask(updated)}
-            onComplete={handleToggleComplete}
-            onStartFocus={handleStartFocus}
-            width={detailPanelWidth}
-            onWidthChange={handleDetailWidthChange}
-          />
-        )}
-
-        {/* Goal Detail Panel */}
-        {selectedGoal && (
-          <div className="w-96 overflow-hidden">
-            <GoalDetail
-              goal={selectedGoal}
-              onClose={() => setSelectedGoal(null)}
-              onUpdate={(updated) => setSelectedGoal(updated)}
-              onSelectTask={(task) => {
-                setSelectedTask(task);
-                setSelectedGoal(null);
-              }}
+        <ErrorBoundary name="DetailPanel">
+          {selectedTask && !selectedGoal && (
+            <TaskDetail
+              task={selectedTask}
+              onClose={() => setSelectedTask(null)}
+              onUpdate={(updated) => setSelectedTask(updated)}
+              onComplete={handleToggleComplete}
+              onStartFocus={handleStartFocus}
+              width={detailPanelWidth}
+              onWidthChange={handleDetailWidthChange}
             />
-          </div>
-        )}
+          )}
+
+          {/* Goal Detail Panel */}
+          {selectedGoal && (
+            <div className="w-96 overflow-hidden">
+              <GoalDetail
+                goal={selectedGoal}
+                onClose={() => setSelectedGoal(null)}
+                onUpdate={(updated) => setSelectedGoal(updated)}
+                onSelectTask={(task) => {
+                  setSelectedTask(task);
+                  setSelectedGoal(null);
+                }}
+              />
+            </div>
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Settings Modal */}
