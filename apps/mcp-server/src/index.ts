@@ -179,6 +179,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // Call Tool Handler
 // ============================================================================
 
+const TOOL_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(fn: () => T, timeoutMs: number, toolName: string): T | Promise<T> {
+  const result = fn();
+  if (result instanceof Promise) {
+    return Promise.race([
+      result,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Tool '${toolName}' timed out after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ]);
+  }
+  return result;
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const timer = createToolTimer(name, args as Record<string, unknown>);
@@ -205,8 +220,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Parse and validate input
     const parsed = tool.inputSchema.parse(args);
 
-    // Execute handler
-    const result = (tool.handler as (input: unknown) => unknown)(parsed);
+    // Execute handler with timeout protection
+    const result = await withTimeout(
+      () => (tool.handler as (input: unknown) => unknown)(parsed),
+      TOOL_TIMEOUT_MS,
+      name
+    );
 
     timer.success();
     return {
